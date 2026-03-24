@@ -685,6 +685,12 @@ function createRoom() {
   state.myName = name;
   state.isHost = true;
   state.socket.emit("create_room", { name, targetPlayers: parseInt($("mp-target-players").value || "4", 10) });
+  const { ref, set } = window.rtdb;
+set(ref(window.db, 'rooms/' + state.roomCode), {
+  metadata: { host: name, status: "lobby" },
+  players: { [state.socket.id]: { name: name, score: 0 } }
+});
+listenToFirebaseRoom(state.roomCode);
 }
 
 function joinRoom() {
@@ -695,6 +701,15 @@ function joinRoom() {
   state.myName = name;
   state.isHost = false;
   state.socket.emit("join_room", { name, roomCode: code });
+  // Inside joinRoom()...
+// NEW FIREBASE SYNC
+const { ref, update } = window.rtdb;
+update(ref(window.db, `rooms/${code}/players/${state.socket.id}`), {
+  name: name,
+  score: 0
+});
+listenToFirebaseRoom(code); // Start listening
+
 }
 
 function startMultiplayerMatch() {
@@ -856,6 +871,41 @@ function showMyRoleInfo() {
   const roleEntry = roles.find((r) => r.role === myRole);
   if (!myRole || !roleEntry) return;
   alert(`${roleEntry.color} • ${roleEntry.role}\n\n${roleEntry.desc}`);
+}
+// Add this new function to your code
+function listenToFirebaseRoom(roomCode) {
+  const { ref, onValue } = window.rtdb;
+  const roomRef = ref(window.db, 'rooms/' + roomCode);
+
+  onValue(roomRef, (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    console.log("📡 Firebase Update Received:", data);
+
+    // 1. Sync Players & Names
+    if (data.players) {
+      state.playerNames = Object.values(data.players).map(p => p.name);
+      state.playerScores = Object.values(data.players).map(p => p.score || 0);
+    }
+
+    // 2. Sync Game Progress
+    if (data.gameState) {
+      state.currentRound = data.gameState.currentRound;
+      state.currentSet = data.gameState.currentSet;
+      state.announcedColor = data.gameState.announcedColor;
+    }
+
+    // 3. Sync History
+    if (data.history) {
+      state.roundHistory = data.history;
+    }
+
+    // Refresh the UI so players see the new scores
+    syncMyScore();
+    updateRoundInfo();
+    renderCircle(); 
+  });
 }
 
 // ==================== RENDER ====================
@@ -2048,6 +2098,31 @@ function calculateRound() {
 
   if (state.chatTimer) clearTimeout(state.chatTimer);
   startChatPhaseAfterRound();
+  // Inside calculateRound(), at the very end...
+if (state.isHost && window.db) {
+  const { ref, update } = window.rtdb;
+  
+  // Prepare the update object
+  const updates = {};
+  
+  // Update scores for every player seat
+  state.playerScores.forEach((score, index) => {
+    // We map the array index back to the socket IDs if needed, 
+    // but a simpler way is a 'scores' node
+    updates[`rooms/${state.roomCode}/scores`] = state.playerScores;
+  });
+
+  // Update game state
+  updates[`rooms/${state.roomCode}/gameState`] = {
+    currentRound: state.currentRound,
+    announcedColor: state.announcedColor,
+    lastUpdate: Date.now()
+  };
+
+  // Push to Firebase
+  update(ref(window.db), updates);
+}
+
 }
 
 function showFinalBoard(reason = "") {
