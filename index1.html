@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Game of Guesses – Simulation</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
@@ -32,6 +33,12 @@ body {
 }
 
 /* CIRCLE TABLE */
+#role-modal-circle {
+  position: relative;
+  min-width: 16rem;
+  min-height: 16rem;
+}
+
 #circle-table {
   position: relative;
   width: min(90vw, 480px);
@@ -109,6 +116,37 @@ body {
   background: linear-gradient(120deg, #020617, #0f172a, #111827, #1e1b4b, #0f172a);
   background-size: 260% 260%;
   animation: bgDrift 14s ease infinite;
+}
+
+/* Mobile layout: prevent overflow, safe areas, readable modals */
+body {
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.modal, #guess-modal > div, #role-modal > div {
+  max-height: min(92vh, 920px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+.chat-input-row input {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 16px;
+}
+@media (max-width: 640px) {
+  #start-screen h1 { font-size: clamp(1.75rem, 10vw, 3rem); line-height: 1.15; }
+  #multiplayer-screen .flex.gap-3 { flex-wrap: wrap; justify-content: center; }
+  #main-game aside { padding: 1rem; }
+  #round-info { font-size: 0.7rem; line-height: 1.3; }
 }
 </style>
 </head>
@@ -365,9 +403,9 @@ SET 1 • ROUND 0 / ?
       <button onclick="hideChatModal()" class="text-zinc-300 hover:text-white">✕</button>
     </div>
     <div id="chat-log" class="bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 h-64 overflow-auto text-sm text-zinc-100 mb-3"></div>
-    <div class="flex gap-2">
-      <input id="chat-input" placeholder="Type message..." class="flex-1 bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
-      <button onclick="sendChatMessage()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Send</button>
+    <div class="chat-input-row">
+      <input id="chat-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
+      <button type="button" onclick="sendChatMessage()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0">Send</button>
     </div>
   </div>
 </div>
@@ -376,9 +414,9 @@ SET 1 • ROUND 0 / ?
 <div id="multiplayer-chat-space" class="hidden w-full max-w-3xl bg-zinc-900/70 border border-cyan-500/30 rounded-3xl p-4 mt-6">
   <div class="text-cyan-300 font-bold mb-2">Room Chat</div>
   <div id="main-chat-log" class="h-64 overflow-auto bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 text-sm mb-3"></div>
-  <div class="flex gap-2">
-    <input id="main-chat-input" placeholder="Type message..." class="flex-1 bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
-    <button onclick="sendMainChatMessage()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Send</button>
+  <div class="chat-input-row">
+    <input id="main-chat-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
+    <button type="button" onclick="sendMainChatMessage()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0">Send</button>
   </div>
 </div>
 
@@ -430,6 +468,8 @@ const state = {
   isHost: false,
   chatPhaseActive: false,
   playerNames: [],
+  playerOrderSocketIds: [],
+  firebaseRoomUnsubscribe: null,
   // For Phantasm flicker restore
   seatBaseBgById: {},
   seatBaseColorById: {}
@@ -685,12 +725,6 @@ function createRoom() {
   state.myName = name;
   state.isHost = true;
   state.socket.emit("create_room", { name, targetPlayers: parseInt($("mp-target-players").value || "4", 10) });
-  const { ref, set } = window.rtdb;
-set(ref(window.db, 'rooms/' + state.roomCode), {
-  metadata: { host: name, status: "lobby" },
-  players: { [state.socket.id]: { name: name, score: 0 } }
-});
-listenToFirebaseRoom(state.roomCode);
 }
 
 function joinRoom() {
@@ -701,15 +735,13 @@ function joinRoom() {
   state.myName = name;
   state.isHost = false;
   state.socket.emit("join_room", { name, roomCode: code });
-  // Inside joinRoom()...
-// NEW FIREBASE SYNC
-const { ref, update } = window.rtdb;
-update(ref(window.db, `rooms/${code}/players/${state.socket.id}`), {
-  name: name,
-  score: 0
-});
-listenToFirebaseRoom(code); // Start listening
-
+  if (window.db && window.rtdb) {
+    const { ref, update } = window.rtdb;
+    update(ref(window.db, `rooms/${code}/players/${state.socket.id}`), {
+      name: name,
+      score: 0
+    });
+  }
 }
 
 function startMultiplayerMatch() {
@@ -743,17 +775,23 @@ function ensureSocket() {
     state.isHost = payload.hostId === state.socket.id;
     $("mp-target-players").value = String(payload.targetPlayers);
     refreshRoomUi();
+    syncFirebaseLobbyRoom(payload);
   });
   state.socket.on("match_started", (payload) => {
     if (payload.roomCode !== state.roomCode) return;
     const myIdx = payload.playerOrder.indexOf(state.socket.id);
     if (myIdx < 0) return;
+    state.playerOrderSocketIds = [...payload.playerOrder];
     hide($("multiplayer-screen"));
     startSimulation(payload.targetPlayers, {
       myId: myIdx + 1,
       assignedRoles: payload.assignedRoles,
       playerNames: payload.playerNames
     });
+    if (state.isHost && window.db && window.rtdb) {
+      pushFirebaseMatchState(payload);
+    }
+    listenToFirebaseRoom(state.roomCode);
   });
   state.socket.on("round_started", () => {
     startRoundFromNetwork();
@@ -762,21 +800,10 @@ function ensureSocket() {
     endDiscussionNow(true);
   });
   state.socket.on("chat_message", ({ sender, text }) => {
-    const log = $("chat-log");
-    if (!log) return;
-    const line = document.createElement("div");
-    line.innerHTML = `<span class="text-cyan-300">${sender}:</span> ${text}`;
-    log.appendChild(line);
-    log.scrollTop = log.scrollHeight;
-
-    const mainLog = $("main-chat-log");
-    if (mainLog) {
-      const copy = document.createElement("div");
-      copy.innerHTML = `<span class="text-cyan-300">${sender}:</span> ${text}`;
-      mainLog.appendChild(copy);
-      mainLog.scrollTop = mainLog.scrollHeight;
-    }
-    mirrorChatToInline();
+    if (window.db && state.roomCode) return;
+    const s = sender != null && String(sender).trim() !== "" ? String(sender).trim().slice(0, 40) : "Player";
+    const t = String(text ?? "");
+    appendChatLineToAllLogs(s, t);
   });
 }
 
@@ -788,30 +815,47 @@ function hideChatModal() {
   hide($("chat-modal"));
 }
 
+function pushChatToFirebase(text) {
+  if (!window.db || !window.rtdb || !state.roomCode) return false;
+  const { ref, push } = window.rtdb;
+  push(ref(window.db, `rooms/${state.roomCode}/messages`), {
+    sender: getChatSenderLabel(),
+    text: text.slice(0, 300),
+    ts: Date.now()
+  });
+  return true;
+}
+
 function sendChatMessage() {
-  if (!state.socket || !state.roomCode) return;
+  if (!state.roomCode) return;
   const input = $("chat-input");
   const text = (input.value || "").trim();
   if (!text) return;
-  state.socket.emit("chat_message", { roomCode: state.roomCode, sender: state.myName || `P${state.myId}`, text });
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
   input.value = "";
 }
 
 function sendMainChatMessage() {
-  if (!state.socket || !state.roomCode) return;
+  if (!state.roomCode) return;
   const input = $("main-chat-input");
   const text = (input.value || "").trim();
   if (!text) return;
-  state.socket.emit("chat_message", { roomCode: state.roomCode, sender: state.myName || `P${state.myId}`, text });
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
   input.value = "";
 }
 
 function sendMainChatMessageInline() {
-  if (!state.socket || !state.roomCode) return;
+  if (!state.roomCode) return;
   const input = $("main-chat-input-inline");
   const text = (input?.value || "").trim();
   if (!text) return;
-  state.socket.emit("chat_message", { roomCode: state.roomCode, sender: state.myName || `P${state.myId}`, text });
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
   input.value = "";
 }
 
@@ -872,39 +916,168 @@ function showMyRoleInfo() {
   if (!myRole || !roleEntry) return;
   alert(`${roleEntry.color} • ${roleEntry.role}\n\n${roleEntry.desc}`);
 }
-// Add this new function to your code
-function listenToFirebaseRoom(roomCode) {
-  const { ref, onValue } = window.rtdb;
-  const roomRef = ref(window.db, 'rooms/' + roomCode);
 
-  onValue(roomRef, (snapshot) => {
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function getChatSenderLabel() {
+  const n = String(state.myName || "").trim();
+  if (n) return n.slice(0, 24);
+  if (state.socket && state.socket.id) return `Player-${state.socket.id.slice(-4)}`;
+  return `P${state.myId || "?"}`;
+}
+
+function appendChatLineToAllLogs(sender, text) {
+  ["chat-log", "main-chat-log", "main-chat-log-inline"].forEach((id) => {
+    const log = $(id);
+    if (!log) return;
+    const row = document.createElement("div");
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "text-cyan-300";
+    nameSpan.textContent = `${sender}:`;
+    row.appendChild(nameSpan);
+    row.appendChild(document.createTextNode(` ${text}`));
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  });
+}
+
+function renderAllChatLogsFromMessages(messages) {
+  const entries = Object.entries(messages || {})
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const html = entries
+    .map((m) => {
+      const s = escapeHtml(m.sender || "Player");
+      const t = escapeHtml(m.text || "");
+      return `<div><span class="text-cyan-300">${s}:</span> ${t}</div>`;
+    })
+    .join("");
+  ["chat-log", "main-chat-log", "main-chat-log-inline"].forEach((id) => {
+    const el = $(id);
+    if (el) {
+      el.innerHTML = html;
+      el.scrollTop = el.scrollHeight;
+    }
+  });
+}
+
+function syncFirebaseLobbyRoom(payload) {
+  if (!window.db || !window.rtdb || !payload.roomCode) return;
+  const code = payload.roomCode;
+  const { ref, update } = window.rtdb;
+  const up = {};
+  if (state.isHost) {
+    up[`rooms/${code}/metadata`] = {
+      targetPlayers: payload.targetPlayers,
+      hostSocketId: payload.hostId,
+      updatedAt: Date.now()
+    };
+  }
+  up[`rooms/${code}/players/${state.socket.id}`] = {
+    name: state.myName || "Player",
+    score: 0,
+    seatIndex: null
+  };
+  update(ref(window.db), up);
+  listenToFirebaseRoom(code);
+}
+
+function pushFirebaseMatchState(payload) {
+  const { ref, update } = window.rtdb;
+  const code = payload.roomCode;
+  const n = payload.targetPlayers;
+  const scores = new Array(n).fill(0);
+  const updates = {};
+  updates[`rooms/${code}/match`] = {
+    playerOrder: payload.playerOrder,
+    playerNames: payload.playerNames,
+    targetPlayers: n
+  };
+  updates[`rooms/${code}/scores`] = scores;
+  payload.playerOrder.forEach((socketId, idx) => {
+    updates[`rooms/${code}/players/${socketId}`] = {
+      name: payload.playerNames[idx] || `Player ${idx + 1}`,
+      seatIndex: idx,
+      score: 0
+    };
+  });
+  updates[`rooms/${code}/gameState`] = {
+    currentSet: 1,
+    currentRound: 0,
+    announcedColor: "",
+    lastUpdate: Date.now()
+  };
+  update(ref(window.db), updates);
+}
+
+function normalizeRoundHistoryFromFirebase(val) {
+  if (!val) return;
+  if (Array.isArray(val)) {
+    state.roundHistory = val;
+    return;
+  }
+  if (typeof val === "object") {
+    state.roundHistory = Object.keys(val)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => val[k])
+      .filter(Boolean);
+  }
+}
+
+function listenToFirebaseRoom(roomCode) {
+  if (!window.db || !window.rtdb) return;
+  if (state.firebaseRoomUnsubscribe) {
+    state.firebaseRoomUnsubscribe();
+    state.firebaseRoomUnsubscribe = null;
+  }
+  const { ref, onValue } = window.rtdb;
+  const roomRef = ref(window.db, "rooms/" + roomCode);
+  state.firebaseRoomUnsubscribe = onValue(roomRef, (snapshot) => {
     const data = snapshot.val();
     if (!data) return;
 
-    console.log("📡 Firebase Update Received:", data);
-
-    // 1. Sync Players & Names
-    if (data.players) {
-      state.playerNames = Object.values(data.players).map(p => p.name);
-      state.playerScores = Object.values(data.players).map(p => p.score || 0);
+    if (Array.isArray(data.scores) && data.scores.length > 0) {
+      if (!state.numPlayers || data.scores.length === state.numPlayers) {
+        state.playerScores = data.scores.map((s) => Number(s) || 0);
+      }
+    } else if (data.match && data.match.playerOrder && data.players) {
+      const order = data.match.playerOrder;
+      state.playerScores = order.map((sid, i) => {
+        const p = data.players[sid];
+        return p && typeof p.score === "number" ? p.score : state.playerScores[i] ?? 0;
+      });
     }
 
-    // 2. Sync Game Progress
+    if (data.match && Array.isArray(data.match.playerNames) && data.match.playerNames.length) {
+      if (!state.numPlayers || data.match.playerNames.length === state.numPlayers) {
+        state.playerNames = [...data.match.playerNames];
+      }
+    }
+
     if (data.gameState) {
-      state.currentRound = data.gameState.currentRound;
-      state.currentSet = data.gameState.currentSet;
-      state.announcedColor = data.gameState.announcedColor;
+      if (typeof data.gameState.currentRound === "number") state.currentRound = data.gameState.currentRound;
+      if (typeof data.gameState.currentSet === "number") state.currentSet = data.gameState.currentSet;
+      if (data.gameState.announcedColor) state.announcedColor = data.gameState.announcedColor;
     }
 
-    // 3. Sync History
-    if (data.history) {
-      state.roundHistory = data.history;
+    if (data.roundHistory != null) {
+      normalizeRoundHistoryFromFirebase(data.roundHistory);
     }
 
-    // Refresh the UI so players see the new scores
+    if (data.messages) {
+      renderAllChatLogsFromMessages(data.messages);
+    }
+
     syncMyScore();
-    updateRoundInfo();
-    renderCircle(); 
+    if (typeof updateRoundInfo === "function" && dom.roundInfo) updateRoundInfo();
+    if (typeof renderCircle === "function" && dom.circle) renderCircle();
   });
 }
 
@@ -916,9 +1089,9 @@ function renderCircle() {
         <div class="w-[92%] max-w-2xl bg-zinc-900/80 border border-cyan-400/40 rounded-3xl p-4">
           <div class="text-cyan-300 font-bold mb-2 text-center">Room Chat</div>
           <div id="main-chat-log-inline" class="h-64 overflow-auto bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 text-sm mb-3"></div>
-          <div class="flex gap-2">
-            <input id="main-chat-input-inline" placeholder="Type message..." class="flex-1 bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
-            <button onclick="sendMainChatMessageInline()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Send</button>
+          <div class="chat-input-row">
+            <input id="main-chat-input-inline" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
+            <button type="button" onclick="sendMainChatMessageInline()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0">Send</button>
           </div>
           ${state.isHost ? `<div class="text-center mt-3"><button onclick="endDiscussionNow()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">End Discussion Now</button></div>` : ""}
         </div>
@@ -1214,13 +1387,16 @@ function startRound() {
     if (actionKey === "empath") {
       const target = Math.floor(Math.random() * state.numPlayers) + 1;
       state.empathPeekTarget = target;
-      dom.status.innerHTML += `<div class="mt-3 text-pink-300 text-sm">Empath armed: after guesses you will see P${target}'s guess.</div>`;
+      openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+      return;
     } else if (actionKey === "illuminator") {
       const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
       const right = (state.myId % state.numPlayers) + 1;
       const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
       const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
-      dom.status.innerHTML += `<div class="mt-3 text-lime-300 text-sm">Illuminator: neighbors same category? <b>${leftCat === rightCat ? "YES" : "NO"}</b></div>`;
+      const same = leftCat === rightCat;
+      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`);
+      return;
     } else if (actionKey === "siphon") {
       const darkPlayers = [];
       for (let p = 1; p <= state.numPlayers; p++) {
@@ -1301,13 +1477,16 @@ function startRoundFromNetwork() {
     if (actionKey === "empath") {
       const target = Math.floor(Math.random() * state.numPlayers) + 1;
       state.empathPeekTarget = target;
-      dom.status.innerHTML += `<div class="mt-3 text-pink-300 text-sm">Empath armed: after guesses you will see P${target}'s guess.</div>`;
+      openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+      return;
     } else if (actionKey === "illuminator") {
       const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
       const right = (state.myId % state.numPlayers) + 1;
       const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
       const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
-      dom.status.innerHTML += `<div class="mt-3 text-lime-300 text-sm">Illuminator: neighbors same category? <b>${leftCat === rightCat ? "YES" : "NO"}</b></div>`;
+      const same = leftCat === rightCat;
+      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`);
+      return;
     }
   }
   setTimeout(openGuessModal, 600);
@@ -1361,12 +1540,36 @@ function makeSeatsClickable(actionType) {
 }
 
 // ==================== ROLE MODAL (user actions) ====================
+function openInformationRoleModal(roleName, infoHtml) {
+  const roleObj = roles.find((r) => r.role === roleName);
+  dom.roleModalTitle.textContent = roleName;
+  dom.roleModalDesc.innerHTML = (roleObj?.desc ? `<p class="mb-3 text-zinc-200 text-sm">${escapeHtml(roleObj.desc)}</p>` : "") + infoHtml;
+  dom.roleModalResult.textContent = "";
+  dom.roleModalCircle.innerHTML = "";
+  dom.roleModalCircle.classList.add("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.add("hidden");
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.add("hidden");
+  const tbtn = $("role-trigger-btn");
+  if (tbtn) tbtn.classList.add("hidden");
+  const cbtn = $("role-continue-btn");
+  if (cbtn) cbtn.classList.remove("hidden");
+  show(dom.roleModal);
+}
+
 function openRoleActionModal(roleName) {
   const roleObj = roles.find((r) => r.role === roleName);
   dom.roleModalTitle.textContent = `${roleName.toUpperCase()} ACTIVATED`;
   dom.roleModalDesc.textContent = roleObj?.desc || "";
   dom.roleModalResult.textContent = "";
   dom.roleModalCircle.innerHTML = "";
+  dom.roleModalCircle.classList.remove("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) {
+    instr.classList.remove("hidden");
+    instr.textContent = "Select players on the table.";
+  }
   const cbtn = $("role-continue-btn");
   if (cbtn) cbtn.classList.add("hidden");
   const abtn = $("role-apply-btn");
@@ -1474,6 +1677,9 @@ function triggerRoleClaim() {
 function continueToGuessFromRole() {
   const btn = $("role-continue-btn");
   if (btn) btn.classList.add("hidden");
+  dom.roleModalCircle.classList.remove("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.remove("hidden");
   hide(dom.roleModal);
   openGuessModal();
 }
@@ -1489,7 +1695,11 @@ function renderRoleSelectionCircle(requiredCount, selectable) {
   const instr = $("role-modal-instruction");
   if (instr) instr.textContent = `Select ${requiredCount} player(s), then click Apply Role.`;
 
-  const size = Math.max(circle.getBoundingClientRect().width || 0, 240);
+  const size = Math.max(
+    circle.getBoundingClientRect().width || 0,
+    circle.offsetWidth || 0,
+    288
+  );
   const radius = (size / 2) * 0.72;
   const cx = size / 2, cy = size / 2;
 
@@ -2069,6 +2279,7 @@ function calculateRound() {
   `;
   syncMyScore();
   state.roundHistory.push({
+    set: state.currentSet,
     round: state.currentRound,
     announcedColor: state.announcedColor,
     holderId,
@@ -2098,31 +2309,38 @@ function calculateRound() {
 
   if (state.chatTimer) clearTimeout(state.chatTimer);
   startChatPhaseAfterRound();
-  // Inside calculateRound(), at the very end...
-if (state.isHost && window.db) {
-  const { ref, update } = window.rtdb;
-  
-  // Prepare the update object
-  const updates = {};
-  
-  // Update scores for every player seat
-  state.playerScores.forEach((score, index) => {
-    // We map the array index back to the socket IDs if needed, 
-    // but a simpler way is a 'scores' node
-    updates[`rooms/${state.roomCode}/scores`] = state.playerScores;
-  });
 
-  // Update game state
-  updates[`rooms/${state.roomCode}/gameState`] = {
-    currentRound: state.currentRound,
-    announcedColor: state.announcedColor,
-    lastUpdate: Date.now()
-  };
-
-  // Push to Firebase
-  update(ref(window.db), updates);
-}
-
+  if (state.isHost && window.db && window.rtdb && state.roomCode && state.onlineMode) {
+    const { ref, update } = window.rtdb;
+    const code = state.roomCode;
+    const updates = {};
+    updates[`rooms/${code}/scores`] = [...state.playerScores];
+    if (Array.isArray(state.playerOrderSocketIds)) {
+      state.playerOrderSocketIds.forEach((sid, idx) => {
+        if (!sid) return;
+        updates[`rooms/${code}/players/${sid}/score`] = state.playerScores[idx] ?? 0;
+      });
+    }
+    updates[`rooms/${code}/gameState`] = {
+      currentSet: state.currentSet,
+      currentRound: state.currentRound,
+      announcedColor: state.announcedColor,
+      lastUpdate: Date.now()
+    };
+    const histKey = `set${state.currentSet}_round${state.currentRound}`;
+    const lastEntry = state.roundHistory[state.roundHistory.length - 1];
+    updates[`rooms/${code}/history/byRound/${histKey}`] = {
+      set: state.currentSet,
+      round: state.currentRound,
+      announcedColor: state.announcedColor,
+      holderId,
+      deltas: lastEntry ? [...lastEntry.deltas] : [],
+      scoresAfter: [...state.playerScores],
+      playerNames: [...state.playerNames]
+    };
+    updates[`rooms/${code}/roundHistory`] = state.roundHistory;
+    update(ref(window.db), updates);
+  }
 }
 
 function showFinalBoard(reason = "") {
@@ -2149,10 +2367,10 @@ function showFinalBoard(reason = "") {
     <h2 class="text-5xl font-bold text-emerald-400 text-center mb-10">SET COMPLETE!</h2>
     ${reason ? `<div class="text-center text-rose-300 mb-4">${reason}</div>` : ""}
     <div class="space-y-6 max-w-3xl mx-auto">${html}</div>
-    <div class="mt-12 flex justify-center gap-8">
-      <button onclick="startNewSet()" class="px-12 py-6 bg-emerald-600 hover:bg-emerald-700 rounded-3xl text-xl font-bold shadow-xl transition">NEW SET</button>
-      <button onclick="showHistoryModal()" class="px-12 py-6 bg-cyan-700 hover:bg-cyan-800 rounded-3xl text-xl font-bold transition">HISTORY</button>
-      <button onclick="location.reload()" class="px-12 py-6 bg-zinc-700 hover:bg-zinc-800 rounded-3xl text-xl font-bold transition">END GAME</button>
+    <div class="mt-12 flex flex-col sm:flex-row flex-wrap justify-center items-stretch gap-4 max-w-3xl mx-auto px-2">
+      <button onclick="startNewSet()" class="px-8 sm:px-12 py-5 sm:py-6 bg-emerald-600 hover:bg-emerald-700 rounded-3xl text-lg sm:text-xl font-bold shadow-xl transition">NEW SET</button>
+      <button onclick="showHistoryModal()" class="px-8 sm:px-12 py-5 sm:py-6 bg-cyan-700 hover:bg-cyan-800 rounded-3xl text-lg sm:text-xl font-bold transition">HISTORY</button>
+      <button onclick="location.reload()" class="px-8 sm:px-12 py-5 sm:py-6 bg-zinc-700 hover:bg-zinc-800 rounded-3xl text-lg sm:text-xl font-bold transition">END GAME</button>
     </div>
   `;
 }
@@ -2170,7 +2388,7 @@ function showHistoryModal() {
         const sc = Array.isArray(r.scores) ? r.scores[idx] : 0;
         return `<div class="text-xs">P${p} (${r.roles[idx]}): guessed P${g ?? "-"} | Δ ${r.deltas[idx] >= 0 ? "+" : ""}${Math.round(r.deltas[idx]*10)/10} | total ${Math.round(sc*10)/10} | ${reason}</div>`;
       }).join("");
-      return `<div class="bg-zinc-800/70 rounded-xl p-3 border border-zinc-700"><div class="font-bold text-amber-300 mb-2">Round ${r.round} • Color ${r.announcedColor} • Holder P${r.holderId}</div>${lines}</div>`;
+      return `<div class="bg-zinc-800/70 rounded-xl p-3 border border-zinc-700"><div class="font-bold text-amber-300 mb-2">Set ${r.set ?? "?"} • Round ${r.round} • Color ${r.announcedColor} • Holder P${r.holderId}</div>${lines}</div>`;
     }).join("");
   }
   show($("history-modal"));
