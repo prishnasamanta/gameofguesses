@@ -31,8 +31,17 @@ const server = http.createServer((req, res) => {
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(404);
-      res.end("Not Found");
+      // SPA fallback: allow /ROOMCODE refresh to load index1.html.
+      const INDEX = path.join(ROOT, "index1.html");
+      fs.readFile(INDEX, (err2, data2) => {
+        if (err2) {
+          res.writeHead(404);
+          res.end("Not Found");
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(data2);
+      });
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
@@ -47,6 +56,15 @@ const io = new Server(server, {
 
 const rooms = new Map();
 
+function normalizePlayerKey(playerKey) {
+  if (playerKey == null) return null;
+  const key = String(playerKey).trim();
+  if (!key) return null;
+  // Keep it compact; only alphanumerics/underscore for safety.
+  const clean = key.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24);
+  return clean || null;
+}
+
 function createRoomCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
@@ -55,9 +73,12 @@ function getOrCreateRoom(code) {
   if (!rooms.has(code)) {
     rooms.set(code, {
       code,
-      hostId: null,
+      hostId: null, // current host socket.id (changes on reconnect)
+      hostPlayerKey: null, // stable identity
       targetPlayers: 4,
-      players: [] // { socketId, name }
+      // Seats are stable across refreshes while the playerKey is retained.
+      // { playerKey, socketId|null, name, seatIndex, lastSeen }
+      players: []
     });
   }
   return rooms.get(code);
@@ -68,7 +89,16 @@ function emitLobby(room) {
     roomCode: room.code,
     hostId: room.hostId,
     targetPlayers: room.targetPlayers,
-    players: room.players.map((p) => ({ socketId: p.socketId, name: p.name })),
+    players: room.players
+      .slice()
+      .sort((a, b) => a.seatIndex - b.seatIndex)
+      .map((p) => ({
+        socketId: p.socketId,
+        playerKey: p.playerKey,
+        name: p.name,
+        seatIndex: p.seatIndex,
+        connected: !!p.socketId
+      })),
     canStart: room.players.length === room.targetPlayers
   };
   io.to(room.code).emit("lobby_update", payload);
@@ -76,16 +106,19 @@ function emitLobby(room) {
 
 function removeSocketFromRooms(socketId) {
   for (const [code, room] of rooms.entries()) {
-    const before = room.players.length;
-    room.players = room.players.filter((p) => p.socketId !== socketId);
+    let changed = false;
+    for (const p of room.players) {
+      if (p.socketId === socketId) {
+        p.socketId = null; // keep seat on refresh
+        p.lastSeen = Date.now();
+        changed = true;
+      }
+    }
     if (room.hostId === socketId) {
-      room.hostId = room.players[0]?.socketId || null;
+      room.hostId = null;
+      changed = true;
     }
-    if (room.players.length === 0) {
-      rooms.delete(code);
-      continue;
-    }
-    if (room.players.length !== before) emitLobby(room);
+    if (changed) emitLobby(room);
   }
 }
 
@@ -114,28 +147,62 @@ function buildAssignedRoles(targetPlayers) {
 }
 
 io.on("connection", (socket) => {
-  socket.on("create_room", ({ name, targetPlayers }) => {
+  socket.on("create_room", ({ name, targetPlayers, playerKey }) => {
     const code = createRoomCode();
     const room = getOrCreateRoom(code);
+    const key = normalizePlayerKey(playerKey) || socket.id.slice(-6);
+    room.hostPlayerKey = key;
     room.hostId = socket.id;
     room.targetPlayers = Math.max(4, Math.min(12, parseInt(targetPlayers, 10) || 4));
-    room.players.push({ socketId: socket.id, name: (name || "Player").trim().slice(0, 20) || "Player" });
+    const seatIndex = 1;
+    room.players.push({
+      playerKey: key,
+      socketId: socket.id,
+      name: (name || "Player").trim().slice(0, 20) || "Player",
+      seatIndex,
+      lastSeen: Date.now()
+    });
     socket.join(code);
     emitLobby(room);
   });
 
-  socket.on("join_room", ({ name, roomCode }) => {
+  socket.on("join_room", ({ name, roomCode, playerKey }) => {
     const code = (roomCode || "").toUpperCase();
     if (!rooms.has(code)) {
       socket.emit("room_error", { message: "Room not found." });
       return;
     }
     const room = rooms.get(code);
+    const key = normalizePlayerKey(playerKey);
+    if (!key) {
+      socket.emit("room_error", { message: "Missing player key." });
+      return;
+    }
+
+    const existing = room.players.find((p) => p.playerKey === key);
+    if (existing) {
+      existing.socketId = socket.id;
+      existing.name = (name || existing.name).trim().slice(0, 20) || existing.name;
+      existing.lastSeen = Date.now();
+      if (room.hostPlayerKey === key) room.hostId = socket.id;
+      socket.join(code);
+      emitLobby(room);
+      return;
+    }
+
     if (room.players.length >= room.targetPlayers) {
       socket.emit("room_error", { message: "Room is full." });
       return;
     }
-    room.players.push({ socketId: socket.id, name: (name || "Player").trim().slice(0, 20) || "Player" });
+
+    const seatIndex = room.players.length + 1;
+    room.players.push({
+      playerKey: key,
+      socketId: socket.id,
+      name: (name || "Player").trim().slice(0, 20) || "Player",
+      seatIndex,
+      lastSeen: Date.now()
+    });
     socket.join(code);
     emitLobby(room);
   });
@@ -158,13 +225,16 @@ io.on("connection", (socket) => {
       return;
     }
     const assignedRoles = buildAssignedRoles(room.targetPlayers);
-    const playerOrder = room.players.map((p) => p.socketId);
+    const ordered = room.players.slice().sort((a, b) => a.seatIndex - b.seatIndex);
+    const playerOrder = ordered.map((p) => p.socketId);
+    const playerKeysInSeat = ordered.map((p) => p.playerKey);
     io.to(code).emit("match_started", {
       roomCode: code,
       targetPlayers: room.targetPlayers,
       assignedRoles,
       playerOrder,
-      playerNames: room.players.map((p) => p.name)
+      playerNames: ordered.map((p) => p.name),
+      playerKeysInSeat
     });
   });
 
