@@ -464,9 +464,15 @@ const state = {
   roomCode: "",
   roomPlayers: [],
   myName: "",
+  playerKey: "",
   socket: null,
   isHost: false,
   chatPhaseActive: false,
+  // Online-only round synchronization (Firebase-driven).
+  roundState: null, // { phase, set, round, announcedColor, announcedRole, holderId, discussionEndsAtMs }
+  roundGuesses: {}, // { [seatIndex:number]: guessedSeatIndex:number|null }
+  lastRoundPhaseKey: "",
+  roundResolvedKey: "",
   playerNames: [],
   playerOrderSocketIds: [],
   firebaseRoomUnsubscribe: null,
@@ -588,6 +594,42 @@ const $ = id => document.getElementById(id);
 const hide = el => el.classList.add("hidden");
 const show = el => el.classList.remove("hidden");
 
+function getRoomCodeFromPath() {
+  // Expect: /ROOMCODE (e.g., /4BKZ3J)
+  const p = (location.pathname || "/").replace(/^\/+/, "");
+  const code = (p || "").toUpperCase();
+  if (!code) return "";
+  if (!/^[A-Z0-9]{4,10}$/.test(code)) return "";
+  return code;
+}
+
+function setRoomCodeInUrl(roomCode) {
+  if (!roomCode) return;
+  const code = String(roomCode).toUpperCase();
+  history.replaceState({}, "", `/${code}`);
+}
+
+function ensureLocalIdentity() {
+  const keyName = "gog_player_key";
+  const nameName = "gog_player_name";
+  let playerKey = localStorage.getItem(keyName) || "";
+  if (!playerKey) {
+    playerKey = `p_${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
+    localStorage.setItem(keyName, playerKey);
+  }
+  const playerName = localStorage.getItem(nameName) || "";
+  state.playerKey = playerKey;
+  state.myName = playerName;
+  return { playerKey, playerName };
+}
+
+function storePlayerName(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return;
+  localStorage.setItem("gog_player_name", trimmed);
+  state.myName = trimmed;
+}
+
 function generateDiscussionLine(guesses) {
   const lines = [
     "AI chat: 'I think P" + (Math.floor(Math.random() * state.numPlayers) + 1) + " looked suspicious.'",
@@ -609,7 +651,13 @@ function startChatPhaseAfterRound() {
     return;
   }
 
-  let timeLeft = 240;
+  const defaultDiscussionSeconds = 240;
+  let timeLeft = defaultDiscussionSeconds;
+  const endsAtMs = state.roundState?.discussionEndsAtMs;
+  if (typeof endsAtMs === "number") {
+    timeLeft = Math.ceil((endsAtMs - Date.now()) / 1000);
+  }
+  if (!Number.isFinite(timeLeft) || timeLeft < 0) timeLeft = 0;
   state.chatPhaseActive = true;
   renderCircle();
   const startBtn = $("start-round-btn");
@@ -629,6 +677,15 @@ function startChatPhaseAfterRound() {
       if (timerInline) timerInline.classList.add("hidden");
       state.chatPhaseActive = false;
       renderCircle();
+
+      // Host updates phase so everyone (including after refresh) reconnects correctly.
+      if (state.isHost && window.db && window.rtdb && state.roomCode) {
+        const { ref, update } = window.rtdb;
+        const updates = {};
+        updates[`rooms/${state.roomCode}/roundState/phase`] = "next_ready";
+        updates[`rooms/${state.roomCode}/roundState/lastUpdate`] = Date.now();
+        update(ref(window.db), updates);
+      }
       return;
     }
     state.chatTimer = setTimeout(tick, 1000);
@@ -650,8 +707,12 @@ function endDiscussionNow(remote = false) {
     startBtn.classList.remove("opacity-60");
   }
   renderCircle();
-  if (!remote && state.onlineMode && state.isHost && state.socket && state.roomCode) {
-    state.socket.emit("end_discussion", { roomCode: state.roomCode });
+  if (!remote && state.onlineMode && state.isHost && window.db && window.rtdb && state.roomCode) {
+    const { ref, update } = window.rtdb;
+    const updates = {};
+    updates[`rooms/${state.roomCode}/roundState/phase`] = "next_ready";
+    updates[`rooms/${state.roomCode}/roundState/lastUpdate`] = Date.now();
+    update(ref(window.db), updates);
   }
 }
 
@@ -722,9 +783,15 @@ function createRoom() {
   ensureSocket();
   const name = ($("mp-name-input").value || "").trim();
   if (!name) return;
+  ensureLocalIdentity();
+  storePlayerName(name);
   state.myName = name;
   state.isHost = true;
-  state.socket.emit("create_room", { name, targetPlayers: parseInt($("mp-target-players").value || "4", 10) });
+  state.socket.emit("create_room", {
+    name,
+    targetPlayers: parseInt($("mp-target-players").value || "4", 10),
+    playerKey: state.playerKey
+  });
 }
 
 function joinRoom() {
@@ -732,16 +799,11 @@ function joinRoom() {
   const name = ($("mp-name-input").value || "").trim();
   const code = ($("mp-room-input").value || "").trim().toUpperCase();
   if (!name || !code) return;
+  ensureLocalIdentity();
+  storePlayerName(name);
   state.myName = name;
   state.isHost = false;
-  state.socket.emit("join_room", { name, roomCode: code });
-  if (window.db && window.rtdb) {
-    const { ref, update } = window.rtdb;
-    update(ref(window.db, `rooms/${code}/players/${state.socket.id}`), {
-      name: name,
-      score: 0
-    });
-  }
+  state.socket.emit("join_room", { name, roomCode: code, playerKey: state.playerKey });
 }
 
 function startMultiplayerMatch() {
@@ -773,6 +835,7 @@ function ensureSocket() {
     state.roomCode = payload.roomCode;
     state.roomPlayers = payload.players.map((p) => p.name);
     state.isHost = payload.hostId === state.socket.id;
+    setRoomCodeInUrl(state.roomCode);
     $("mp-target-players").value = String(payload.targetPlayers);
     refreshRoomUi();
     syncFirebaseLobbyRoom(payload);
@@ -788,16 +851,18 @@ function ensureSocket() {
       assignedRoles: payload.assignedRoles,
       playerNames: payload.playerNames
     });
+    localStorage.setItem("gog_mySeatIndex", String(myIdx + 1));
     if (state.isHost && window.db && window.rtdb) {
       pushFirebaseMatchState(payload);
     }
     listenToFirebaseRoom(state.roomCode);
   });
+  // Round flow is Firebase-driven in multiplayer now.
   state.socket.on("round_started", () => {
-    startRoundFromNetwork();
+    if (!state.onlineMode) startRoundFromNetwork();
   });
   state.socket.on("discussion_ended", () => {
-    endDiscussionNow(true);
+    if (!state.onlineMode) endDiscussionNow(true);
   });
   state.socket.on("chat_message", ({ sender, text }) => {
     if (window.db && state.roomCode) return;
@@ -998,7 +1063,10 @@ function pushFirebaseMatchState(payload) {
   updates[`rooms/${code}/match`] = {
     playerOrder: payload.playerOrder,
     playerNames: payload.playerNames,
-    targetPlayers: n
+    targetPlayers: n,
+    assignedRoles: payload.assignedRoles,
+    started: true,
+    createdAt: Date.now()
   };
   updates[`rooms/${code}/scores`] = scores;
   payload.playerOrder.forEach((socketId, idx) => {
@@ -1043,6 +1111,27 @@ function listenToFirebaseRoom(roomCode) {
     const data = snapshot.val();
     if (!data) return;
 
+    // Resume from an already-started Firebase match (refresh-safe).
+    if (
+      data.match &&
+      data.match.started &&
+      Array.isArray(data.match.assignedRoles) &&
+      data.match.assignedRoles.length > 0 &&
+      (!state.numPlayers || state.numPlayers === 0)
+    ) {
+      const targetPlayers = data.match.targetPlayers || data.match.assignedRoles.length;
+      const savedSeat = parseInt(localStorage.getItem("gog_mySeatIndex") || "0", 10);
+      const myId = savedSeat > 0 && savedSeat <= targetPlayers ? savedSeat : 1;
+
+      state.onlineMode = true;
+      if ($("multiplayer-screen")) hide($("multiplayer-screen"));
+      startSimulation(targetPlayers, {
+        myId,
+        assignedRoles: data.match.assignedRoles,
+        playerNames: data.match.playerNames || []
+      });
+    }
+
     if (Array.isArray(data.scores) && data.scores.length > 0) {
       if (!state.numPlayers || data.scores.length === state.numPlayers) {
         state.playerScores = data.scores.map((s) => Number(s) || 0);
@@ -1078,7 +1167,177 @@ function listenToFirebaseRoom(roomCode) {
     syncMyScore();
     if (typeof updateRoundInfo === "function" && dom.roundInfo) updateRoundInfo();
     if (typeof renderCircle === "function" && dom.circle) renderCircle();
+
+    // Firebase-driven round synchronization (guessing -> discussion -> next_round_ready)
+    if (data.roundState && state.numPlayers > 0 && dom.circle) {
+      applyRoundStateFromFirebase(data.roundState, data.roundGuesses || {});
+    }
   });
+}
+
+function applyRoundStateFromFirebase(roundState, roundGuesses) {
+  if (!roundState || !state.numPlayers) return;
+  state.roundState = roundState;
+  state.roundGuesses = roundGuesses || {};
+
+  const phaseKey = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}_${roundState.phase}`;
+  const lastKey = state.lastRoundPhaseKey || "";
+
+  const setNum = typeof roundState.set === "number" ? roundState.set : state.currentSet;
+  const roundNum = typeof roundState.round === "number" ? roundState.round : state.currentRound;
+
+  // Always keep the shared counters aligned.
+  if (typeof setNum === "number") state.currentSet = setNum;
+  if (typeof roundNum === "number") state.currentRound = roundNum;
+
+  const startBtn = $("start-round-btn");
+
+  if (roundState.phase === "guessing") {
+    state.roundInProgress = true;
+    state.chatPhaseActive = false;
+    if (dom.status) {
+      state.announcedColor = roundState.announcedColor || state.announcedColor;
+      state.announcedRole = roundState.announcedRole || state.announcedRole;
+      state.holderId = typeof roundState.holderId === "number" ? roundState.holderId : state.holderId;
+
+      updateRoundInfo();
+      const announcedHex = colorHex[state.announcedColor] || "#22c55e";
+      const announcedText = getContrastingText(announcedHex);
+      dom.status.innerHTML = `
+        <div class="text-amber-300 text-xl mb-4">ANNOUNCED COLOR</div>
+        <div class="inline-block px-10 py-5 text-5xl font-bold rounded-3xl mb-6" style="background:${announcedHex}; color:${announcedText}">
+          ${state.announcedColor}
+        </div>
+      `;
+    }
+
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.classList.add("opacity-60");
+    }
+
+    // Prepare plannedGuesses from Firebase only for host resolving. For everyone else it's populated at resolution time.
+    state.plannedGuesses = new Array(state.numPlayers).fill(null);
+
+    // If this is a fresh phase entry (not just new guesses), open/skip the guess modal.
+    if (phaseKey !== lastKey) {
+      hide(dom.modal);
+      const myGuess = state.roundGuesses[state.myId];
+      if (myGuess !== undefined) {
+        state.playerGuess = myGuess;
+        if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
+      } else {
+        // Info-role popups for UX.
+        const myRole = state.assignedRoles[state.myId - 1];
+        state.activeAbilityRole = myRole;
+        const actionKey = roleActionByRoleName[myRole];
+        if (actionKey === "empath") {
+          const target = Math.floor(Math.random() * state.numPlayers) + 1;
+          state.empathPeekTarget = target;
+          openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+          state.lastRoundPhaseKey = phaseKey;
+          return;
+        }
+        if (actionKey === "illuminator") {
+          const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
+          const right = (state.myId % state.numPlayers) + 1;
+          const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
+          const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
+          const same = leftCat === rightCat;
+          openInformationRoleModal(
+            "The Illuminator",
+            `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`
+          );
+          state.lastRoundPhaseKey = phaseKey;
+          return;
+        }
+
+        setTimeout(openGuessModal, 250);
+      }
+
+      state.lastRoundPhaseKey = phaseKey;
+    }
+
+    // Host resolves the round once every seat submitted.
+    if (state.isHost) {
+      const key = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}`;
+      const alreadyResolved = state.roundResolvedKey === key;
+      if (!alreadyResolved) {
+        let allSubmitted = true;
+        for (let seat = 1; seat <= state.numPlayers; seat++) {
+          if (state.roundGuesses[seat] === undefined) {
+            allSubmitted = false;
+            break;
+          }
+        }
+        if (allSubmitted) {
+          state.roundResolvedKey = key;
+          // Build full guesses map for calculateRound() from Firebase.
+          state.playerGuess = state.roundGuesses[state.myId] ?? null;
+          for (let seat = 1; seat <= state.numPlayers; seat++) {
+            if (seat === state.myId) continue;
+            state.plannedGuesses[seat - 1] = state.roundGuesses[seat] ?? null;
+          }
+
+          // Transition to discussion phase synchronously for everyone.
+          const discussionSeconds = 240;
+          const discussionEndsAtMs = Date.now() + discussionSeconds * 1000;
+          state.roundState.discussionEndsAtMs = discussionEndsAtMs;
+
+          if (window.db && window.rtdb && state.roomCode) {
+            const { ref, update } = window.rtdb;
+            const code = state.roomCode;
+            const updates = {};
+            updates[`rooms/${code}/roundState/phase`] = "discussion";
+            updates[`rooms/${code}/roundState/discussionEndsAtMs`] = discussionEndsAtMs;
+            updates[`rooms/${code}/roundState/lastUpdate`] = Date.now();
+            update(ref(window.db), updates);
+          }
+
+          // Hide guess modal and resolve.
+          if (dom.modal) hide(dom.modal);
+          calculateRound();
+        }
+      }
+    }
+    return;
+  }
+
+  if (roundState.phase === "discussion") {
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.classList.add("opacity-60");
+    }
+    // Everyone should start the shared timer after phase changes/reconnect.
+    // But if the host just resolved via calculateRound(), it will start the timer itself.
+    if (phaseKey !== lastKey) {
+      const roundKey = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}`;
+      if (!(state.isHost && state.roundResolvedKey === roundKey)) {
+        hide(dom.modal);
+        state.chatPhaseActive = true;
+        if (dom.status) {
+          dom.status.innerHTML = `Round ${state.currentRound} resolved. Discussion started.`;
+        }
+        state.lastRoundPhaseKey = phaseKey;
+        startChatPhaseAfterRound();
+      } else {
+        state.lastRoundPhaseKey = phaseKey;
+      }
+    }
+    return;
+  }
+
+  if (roundState.phase === "next_ready") {
+    state.chatPhaseActive = false;
+    if (startBtn) {
+      startBtn.disabled = !state.isHost;
+      startBtn.classList.toggle("opacity-60", !state.isHost);
+      startBtn.classList.toggle("cursor-not-allowed", !state.isHost);
+    }
+    state.lastRoundPhaseKey = phaseKey;
+    renderCircle();
+    return;
+  }
 }
 
 // ==================== RENDER ====================
@@ -1307,9 +1566,10 @@ function updateRoundInfo() {
 function startRound() {
   if (state.roundInProgress) return;
   if (state.onlineMode && !state.isHost) return;
-  if (state.onlineMode && state.isHost && state.socket && state.roomCode) {
-    state.socket.emit("start_round", { roomCode: state.roomCode });
-    return;
+  if (state.onlineMode && state.isHost && state.roomCode && window.db && window.rtdb) {
+    // Firebase-driven start: set shared roundState so all players (including refresh/reconnect)
+    // land on the same guessing phase.
+    // (We keep the local UI logic below so host sees it immediately.)
   }
   if (state.gameOver) {
     showFinalBoard();
@@ -1347,11 +1607,8 @@ function startRound() {
   state.holderId = holderIdx >= 0 ? holderIdx + 1 : 1;
 
   // Generate other players' planned guesses for Sensei / Guardian / Analyst.
+  // In online mode, guesses come from Firebase (host resolves once everyone submitted).
   state.plannedGuesses = new Array(state.numPlayers).fill(null);
-  for (let seat = 1; seat <= state.numPlayers; seat++) {
-    if (seat === state.myId) continue;
-    state.plannedGuesses[seat - 1] = Math.floor(Math.random() * state.numPlayers) + 1;
-  }
 
   // High visibility pulse for holder seat
   const myRole = state.assignedRoles[state.myId - 1];
@@ -1376,12 +1633,48 @@ function startRound() {
     </div>
   `;
 
+  // Host writes the shared roundState + clears roundGuesses early (before any role modal returns),
+  // so all clients reliably enter the same phase after refresh/reconnect.
+  if (state.onlineMode && state.isHost && window.db && window.rtdb && state.roomCode) {
+    const { ref, update } = window.rtdb;
+    const code = state.roomCode;
+    const updates = {};
+    updates[`rooms/${code}/gameState`] = {
+      currentSet: state.currentSet,
+      currentRound: state.currentRound,
+      announcedColor: state.announcedColor,
+      lastUpdate: Date.now()
+    };
+    updates[`rooms/${code}/roundState`] = {
+      phase: "guessing",
+      set: state.currentSet,
+      round: state.currentRound,
+      announcedColor: state.announcedColor,
+      announcedRole: state.announcedRole,
+      holderId: state.holderId,
+      startedAtMs: Date.now(),
+      discussionEndsAtMs: null,
+      lastUpdate: Date.now()
+    };
+    updates[`rooms/${code}/roundGuesses`] = {};
+    update(ref(window.db), updates);
+    // UI will be opened by applyRoundStateFromFirebase() from the Firebase update.
+    return;
+  }
+
   state.activeAbilityRole = myRole;
 
   if (state.activeAbilityRole) {
     const actionKey = roleActionByRoleName[state.activeAbilityRole];
     if (["oracle","corrupter","hunter","siphon","soulswapper","executioner"].includes(actionKey)) {
-      openRoleActionModal(state.activeAbilityRole);
+      // In multiplayer, keep round resolution deterministic (host will resolve using submitted guesses).
+      // Let interactive role actions remain in single-player only for now.
+      if (!state.onlineMode) {
+        openRoleActionModal(state.activeAbilityRole);
+        return;
+      }
+      // Multiplayer: skip interactive role UI; host will resolve using submitted guesses.
+      setTimeout(openGuessModal, 1100);
       return;
     }
     if (actionKey === "empath") {
@@ -1920,11 +2213,49 @@ function renderMiniCircle() {
 function submitPlayerGuess() {
   if (!state.playerGuess) return;
   hide(dom.modal);
+
+  if (state.onlineMode) {
+    if (!state.roomCode || !window.db || !window.rtdb) return;
+    if (state.roundState?.phase !== "guessing") return;
+    // Prevent duplicate submissions.
+    if (state.roundGuesses && state.roundGuesses[state.myId] !== undefined) {
+      return;
+    }
+
+    const guess = state.playerGuess;
+    state.roundGuesses = { ...(state.roundGuesses || {}), [state.myId]: guess };
+
+    const { ref, update } = window.rtdb;
+    const updates = {};
+    updates[`rooms/${state.roomCode}/roundGuesses/${state.myId}`] = guess;
+    updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
+    update(ref(window.db), updates);
+
+    if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
+    return;
+  }
+
   calculateRound();
 }
 
 function noVote() {
   hide(dom.modal);
+  if (state.onlineMode) {
+    if (!state.roomCode || !window.db || !window.rtdb) return;
+    if (state.roundState?.phase !== "guessing") return;
+    if (state.roundGuesses && state.roundGuesses[state.myId] !== undefined) return;
+
+    const { ref, update } = window.rtdb;
+    const updates = {};
+    // RTDB treats `null` as delete. Use 0 as the "no vote" sentinel.
+    updates[`rooms/${state.roomCode}/roundGuesses/${state.myId}`] = 0;
+    updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
+    update(ref(window.db), updates);
+
+    if (dom.status) dom.status.innerHTML = `No vote submitted. Waiting for other guesses...`;
+    return;
+  }
+
   let delta = -25;
 
   // If Gambler skipped previous round, double THIS round's points.
@@ -2101,11 +2432,18 @@ function calculateRound() {
   const guesses = new Array(state.numPlayers + 1).fill(null); // 1-based
   for (let p = 1; p <= state.numPlayers; p++) {
     if (p === state.myId) {
-      guesses[p] = state.playerGuess;
+      guesses[p] = state.playerGuess === 0 ? null : state.playerGuess;
     } else {
       let g = state.plannedGuesses[p - 1];
-      if (!g) g = Math.floor(Math.random() * state.numPlayers) + 1;
-      guesses[p] = g;
+      // Online "no vote" is stored as null in roundGuesses; keep it as null (do not randomize).
+      if (g === null || g === 0) {
+        guesses[p] = null;
+      } else if (g === undefined) {
+        // Single-player fallback: if no planned guess exists, generate one.
+        guesses[p] = Math.floor(Math.random() * state.numPlayers) + 1;
+      } else {
+        guesses[p] = g;
+      }
     }
   }
 
@@ -2249,6 +2587,15 @@ function calculateRound() {
         deltas[strike - 1] -= 30;
         reasons[p - 1] += `Hunter struck P${strike} (-30). `;
       }
+    }
+  }
+
+  // No-vote players (guesses[p] === null) only take the -25 penalty.
+  // This matches the single-player `noVote()` behavior without forcing them into random guesses.
+  for (let p = 1; p <= state.numPlayers; p++) {
+    if (guesses[p] === null) {
+      deltas[p - 1] -= 25;
+      reasons[p - 1] += "No vote penalty -25. ";
     }
   }
 
@@ -2436,6 +2783,21 @@ window.onload = () => {
       btn.textContent = String(n);
       btn.onclick = () => startSimulation(n);
       grid.appendChild(btn);
+    }
+  }
+
+  // If URL is already a room (e.g. /4BKZ3J), auto-join and resume.
+  const roomFromUrl = getRoomCodeFromPath();
+  const { playerName } = ensureLocalIdentity();
+  if (roomFromUrl) {
+    startOnlineMode();
+    if ($("mp-room-input")) $("mp-room-input").value = roomFromUrl;
+    if ($("mp-name-input") && playerName) $("mp-name-input").value = playerName;
+    if (playerName) {
+      joinRoom();
+    } else {
+      // User needs to enter name; we keep them on the lobby screen.
+      show($("multiplayer-screen"));
     }
   }
 };
