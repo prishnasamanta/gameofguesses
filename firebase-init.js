@@ -1,7 +1,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-analytics.js";
-// ADDED: Import Database modules
-import { getDatabase, ref, set, onValue, update, push } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+import {
+  ref,
+  set,
+  update,
+  onValue,
+  push,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC6E5x9tZLYDsPLvS2VlRt772iHtxEVzUs",
@@ -14,19 +21,13 @@ const firebaseConfig = {
   measurementId: "G-2Z8JMCP9YC"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getDatabase(app); // Initialize the Database
+const db = getDatabase(app);
 
-// Analytics check
 isSupported().then((ok) => {
   if (ok) getAnalytics(app);
-});
+}).catch(() => {});
 
-// EXPOSE TO GLOBAL WINDOW 
-// This allows your main game script to use 'db' and 'rtdb' commands easily
 window.firebaseApp = app;
 window.db = db;
-window.rtdb = { ref, set, onValue, update, push };
-
-console.log("🔥 Firebase Initialized & Database Ready!");
+window.rtdb = { ref, set, update, onValue, push, serverTimestamp };
