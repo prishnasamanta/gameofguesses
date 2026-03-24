@@ -188,7 +188,8 @@ io.on("connection", (socket) => {
     const code = (roomCode || "").toUpperCase();
     const room = rooms.get(code);
     if (!room) return;
-    const senderName = (sender || "Player").slice(0, 20);
+    const raw = sender != null && String(sender).trim() !== "" ? String(sender) : "Player";
+    const senderName = raw.slice(0, 20);
     const safeText = (text || "").slice(0, 300);
     if (!safeText.trim()) return;
     io.to(code).emit("chat_message", { sender: senderName, text: safeText, ts: Date.now() });
