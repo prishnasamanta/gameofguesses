@@ -162,6 +162,26 @@ body {
   #main-game aside { padding: 1rem; }
   #round-info { font-size: 0.7rem; line-height: 1.3; }
 }
+
+/* Mobile sidebar behavior */
+@media (max-width: 767px) {
+  #main-game aside {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(86vw, 340px) !important;
+    z-index: 60;
+    transform: translateX(-110%);
+    transition: transform 180ms ease;
+  }
+  #main-game.sidebar-open aside {
+    transform: translateX(0);
+  }
+  #main-game.sidebar-open main {
+    filter: blur(1px);
+  }
+}
 </style>
 </head>
 <body>
@@ -257,6 +277,9 @@ PLAY MULTIPLAYER ONLINE
 
 <!-- GAME AREA -->
 <main class="flex-1 p-6 md:p-10 flex flex-col items-center animated-main">
+<button id="mobile-sidebar-toggle" type="button" class="md:hidden fixed top-4 left-4 z-50 bg-zinc-900/90 border border-cyan-500/30 text-cyan-200 px-3 py-2 rounded-xl text-xs font-bold">
+  ☰
+</button>
 <div class="w-full max-w-5xl flex flex-col items-center gap-3 mb-4">
 <div id="round-info" class="bg-zinc-900 px-4 py-2 rounded-xl border border-yellow-500/40 text-yellow-300 font-bold text-sm md:text-base">
 SET 1 • ROUND 0 / ?
@@ -303,6 +326,14 @@ SET 1 • ROUND 0 / ?
   <input id="mp-room-input" placeholder="Room code" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
   <div id="mp-room-link" class="text-xs text-zinc-300"></div>
   <div id="mp-players-list" class="bg-zinc-900/70 border border-cyan-500/30 rounded-xl p-4 w-full max-w-md text-sm"></div>
+  <div class="w-full max-w-md bg-zinc-900/70 border border-cyan-500/30 rounded-xl p-3">
+    <div class="text-cyan-300 font-bold text-xs mb-2">Lobby Chat</div>
+    <div id="mp-lobby-chat-log" class="h-36 overflow-auto bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 text-xs mb-2"></div>
+    <div class="chat-input-row">
+      <input id="mp-lobby-chat-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2 text-xs" />
+      <button type="button" onclick="sendLobbyChatMessage()" class="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0 text-xs">Send</button>
+    </div>
+  </div>
   <div id="mp-waiting" class="text-xs text-cyan-200"></div>
   <button id="mp-start-btn" onclick="startMultiplayerMatch()" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold opacity-50 cursor-not-allowed" disabled>Start Match</button>
 </div>
@@ -434,6 +465,9 @@ SET 1 • ROUND 0 / ?
   </div>
 </div>
 
+<!-- TOAST -->
+<div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] bg-zinc-900/95 border border-cyan-500/30 text-cyan-100 text-xs px-4 py-3 rounded-2xl shadow-2xl max-w-[92vw]"></div>
+
 <script>
 // ==================== STATE & CONFIG ====================
 const state = {
@@ -491,6 +525,10 @@ const state = {
   playerOrderSocketIds: [],
   playerOrderPlayerKeys: [],
   firebaseRoomUnsubscribe: null,
+  presenceByPlayerKey: {},
+  presenceTimer: null,
+  _guessPhaseRerenderTimer: null,
+  _lastSubmittedToastMsg: "",
   // For Phantasm flicker restore
   seatBaseBgById: {},
   seatBaseColorById: {}
@@ -609,6 +647,32 @@ const $ = id => document.getElementById(id);
 const hide = el => el.classList.add("hidden");
 const show = el => el.classList.remove("hidden");
 
+function showToast(msg, ms = 1400) {
+  const el = $("toast");
+  if (!el) return;
+  el.textContent = String(msg || "");
+  el.classList.remove("hidden");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add("hidden"), ms);
+}
+
+function copyRoomUrl() {
+  if (!state.roomCode) return;
+  const url = `${location.origin}/${state.roomCode}`;
+  const done = () => showToast("Room URL copied");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(() => {});
+    return;
+  }
+  // Fallback
+  const ta = document.createElement("textarea");
+  ta.value = url;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) {}
+  document.body.removeChild(ta);
+}
+
 function getRoomCodeFromPath() {
   // Expect: /ROOMCODE (e.g., /4BKZ3J)
   const p = (location.pathname || "/").replace(/^\/+/, "");
@@ -636,14 +700,16 @@ function setRoomCodeInUrl(roomCode) {
 }
 
 function ensureLocalIdentity() {
+  // Use per-tab identity so multiple tabs can join as different players.
+  // sessionStorage survives refresh in the same tab.
   const keyName = "gog_player_key";
   const nameName = "gog_player_name";
-  let playerKey = localStorage.getItem(keyName) || "";
+  let playerKey = sessionStorage.getItem(keyName) || "";
   if (!playerKey) {
     playerKey = `p_${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
-    localStorage.setItem(keyName, playerKey);
+    sessionStorage.setItem(keyName, playerKey);
   }
-  const playerName = localStorage.getItem(nameName) || "";
+  const playerName = sessionStorage.getItem(nameName) || "";
   state.playerKey = playerKey;
   state.myName = playerName;
   return { playerKey, playerName };
@@ -652,8 +718,40 @@ function ensureLocalIdentity() {
 function storePlayerName(name) {
   const trimmed = String(name || "").trim();
   if (!trimmed) return;
-  localStorage.setItem("gog_player_name", trimmed);
+  sessionStorage.setItem("gog_player_name", trimmed);
   state.myName = trimmed;
+}
+
+function upsertPresence() {
+  if (!state.onlineMode || !state.roomCode || !window.db || !window.rtdb) return;
+  if (!state.playerKey) ensureLocalIdentity();
+  const key = state.playerKey;
+  if (!key) return;
+  const { ref, update } = window.rtdb;
+  const now = Date.now();
+  const payload = {
+    name: state.myName || (sessionStorage.getItem("gog_player_name") || "Player"),
+    lastSeen: now,
+    online: true
+  };
+  update(ref(window.db, `rooms/${state.roomCode}/presence/${key}`), payload);
+}
+
+function startPresenceHeartbeat() {
+  if (state.presenceTimer) clearInterval(state.presenceTimer);
+  upsertPresence();
+  state.presenceTimer = setInterval(upsertPresence, 5000);
+
+  window.addEventListener("beforeunload", () => {
+    if (!state.roomCode || !window.db || !window.rtdb || !state.playerKey) return;
+    try {
+      const { ref, update } = window.rtdb;
+      update(ref(window.db, `rooms/${state.roomCode}/presence/${state.playerKey}`), {
+        online: false,
+        lastSeen: Date.now()
+      });
+    } catch (e) {}
+  });
 }
 
 function generateDiscussionLine(guesses) {
@@ -792,7 +890,32 @@ function backToStartFromLobby() {
 }
 
 function refreshRoomUi() {
-  $("mp-room-link").textContent = state.roomCode ? `Room: ${state.roomCode} (share this code)` : "";
+  const inRoom = !!state.roomCode;
+  const nameInput = $("mp-name-input");
+  const roomInput = $("mp-room-input");
+  const btnBack = document.querySelector("#multiplayer-screen button[onclick='backToStartFromLobby()']");
+  const btnCreate = document.querySelector("#multiplayer-screen button[onclick='createRoom()']");
+  const btnJoin = document.querySelector("#multiplayer-screen button[onclick='joinRoom()']");
+  const targetSel = $("mp-target-players");
+
+  // Once you are in a room, hide lobby controls and only show room details.
+  if (nameInput) nameInput.classList.toggle("hidden", inRoom);
+  if (roomInput) roomInput.classList.toggle("hidden", inRoom);
+  if (btnBack) btnBack.classList.toggle("hidden", inRoom);
+  if (btnCreate) btnCreate.classList.toggle("hidden", inRoom);
+  if (btnJoin) btnJoin.classList.toggle("hidden", inRoom);
+  if (targetSel) targetSel.disabled = inRoom && !state.isHost;
+
+  if (state.roomCode) {
+    const roomUrl = `${location.origin}/${state.roomCode}`;
+    $("mp-room-link").innerHTML = `
+      <span class="text-cyan-300">Room URL:</span>
+      <a class="underline decoration-cyan-400" href="${roomUrl}" target="_blank" rel="noopener noreferrer">${roomUrl}</a>
+      <button type="button" onclick="copyRoomUrl()" class="ml-2 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[10px]">Copy</button>
+    `;
+  } else {
+    $("mp-room-link").textContent = "";
+  }
   $("mp-players-list").innerHTML = state.roomPlayers.length
     ? `<b>Joined Players</b><br>${state.roomPlayers.map((n, i) => `${i + 1}. ${n || `Player ${i + 1}`}`).join("<br>")}`
     : "No players yet.";
@@ -954,6 +1077,17 @@ function sendMainChatMessageInline() {
   input.value = "";
 }
 
+function sendLobbyChatMessage() {
+  if (!state.roomCode) return;
+  const input = $("mp-lobby-chat-input");
+  const text = (input?.value || "").trim();
+  if (!text) return;
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
+  input.value = "";
+}
+
 function mirrorChatToInline() {
   const src = $("main-chat-log");
   const dst = $("main-chat-log-inline");
@@ -1029,7 +1163,7 @@ function getChatSenderLabel() {
 }
 
 function appendChatLineToAllLogs(sender, text) {
-  ["chat-log", "main-chat-log", "main-chat-log-inline"].forEach((id) => {
+  ["chat-log", "main-chat-log", "main-chat-log-inline", "mp-lobby-chat-log"].forEach((id) => {
     const log = $(id);
     if (!log) return;
     const row = document.createElement("div");
@@ -1054,7 +1188,7 @@ function renderAllChatLogsFromMessages(messages) {
       return `<div><span class="text-cyan-300">${s}:</span> ${t}</div>`;
     })
     .join("");
-  ["chat-log", "main-chat-log", "main-chat-log-inline"].forEach((id) => {
+  ["chat-log", "main-chat-log", "main-chat-log-inline", "mp-lobby-chat-log"].forEach((id) => {
     const el = $(id);
     if (el) {
       el.innerHTML = html;
@@ -1158,6 +1292,7 @@ function listenToFirebaseRoom(roomCode) {
   state.firebaseRoomUnsubscribe = onValue(roomRef, (snapshot) => {
     const data = snapshot.val();
     if (!data) return;
+    window._lastRoomData = data;
 
     // Resume from an already-started Firebase match (refresh-safe).
     if (
@@ -1214,6 +1349,15 @@ function listenToFirebaseRoom(roomCode) {
 
     if (data.messages) {
       renderAllChatLogsFromMessages(data.messages);
+    }
+
+    if (data.presence) {
+      state.presenceByPlayerKey = data.presence || {};
+    }
+
+    // Start presence heartbeat once we know we are in a room.
+    if (state.onlineMode && state.roomCode) {
+      startPresenceHeartbeat();
     }
 
     syncMyScore();
@@ -1318,6 +1462,28 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
       state.lastRoundPhaseKey = phaseKey;
     }
 
+    // Submitted counter toast (for everyone).
+    const submittedCount = Object.keys(state.roundGuesses || {}).length;
+    if (submittedCount > 0 && submittedCount <= state.numPlayers) {
+      const msg = `Guesses submitted: ${submittedCount}/${state.numPlayers}`;
+      if (state._lastSubmittedToastMsg !== msg) {
+        state._lastSubmittedToastMsg = msg;
+        showToast(msg, 1200);
+      }
+    }
+
+    // Keep countdown UI fresh (rejoin timers + guess timers).
+    if (!state._guessPhaseRerenderTimer) {
+      state._guessPhaseRerenderTimer = setInterval(() => {
+        if (state.roundState?.phase !== "guessing") {
+          clearInterval(state._guessPhaseRerenderTimer);
+          state._guessPhaseRerenderTimer = null;
+          return;
+        }
+        renderCircle();
+      }, 1000);
+    }
+
     // Host resolves the round once every seat submitted.
     if (state.isHost) {
       const key = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}`;
@@ -1330,6 +1496,25 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
             break;
           }
         }
+        // If not all submitted by guess deadline, fill missing guesses with deterministic AI.
+        const guessEndsAtMs = typeof roundState.guessEndsAtMs === "number" ? roundState.guessEndsAtMs : null;
+        const pastDeadline = guessEndsAtMs != null && Date.now() > guessEndsAtMs;
+        if (!allSubmitted && pastDeadline && window.OnlinePointCalculator && window.db && window.rtdb && state.roomCode) {
+          const { ref, update } = window.rtdb;
+          const updates = {};
+          for (let seat = 1; seat <= state.numPlayers; seat++) {
+            if (state.roundGuesses[seat] !== undefined) continue;
+            // AI guess uses deterministic hash (seat+round) so refresh won't change it.
+            const aiGuess = 1 + (window.OnlinePointCalculator.computeOnlineRoleEffects
+              ? (Math.abs((seat * 1009 + roundNum * 917 + setNum * 251) % state.numPlayers))
+              : 0);
+            updates[`rooms/${state.roomCode}/roundGuesses/${seat}`] = aiGuess;
+          }
+          updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
+          update(ref(window.db), updates);
+          // Wait for the next Firebase update to re-check allSubmitted.
+          return;
+        }
         if (allSubmitted) {
           state.roundResolvedKey = key;
           // Build full guesses map for calculateRound() from Firebase.
@@ -1337,6 +1522,20 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
           for (let seat = 1; seat <= state.numPlayers; seat++) {
             if (seat === state.myId) continue;
             state.plannedGuesses[seat - 1] = state.roundGuesses[seat] ?? null;
+          }
+
+          // Apply queued SG redemptions before resolving.
+          if (window.db && window.rtdb && state.roomCode) {
+            const roundKey = `set${setNum}_round${roundNum}`;
+            const sg = (window._lastRoomData && window._lastRoomData.sg && window._lastRoomData.sg[roundKey]) ? window._lastRoomData.sg[roundKey] : null;
+            if (sg) {
+              for (let seat = 1; seat <= state.numPlayers; seat++) {
+                const entry = sg[seat];
+                if (entry && entry.type === "redemption") {
+                  state.playerScores[seat - 1] += Number(entry.delta) || 0;
+                }
+              }
+            }
           }
 
           // Transition to discussion phase synchronously for everyone.
@@ -1466,9 +1665,26 @@ function renderCircle() {
     seat.dataset.baseBg = seat.style.background;
     seat.dataset.baseColor = seat.style.color;
 
+    let nameLine = "";
+    let timerLine = "";
+    if (state.onlineMode) {
+      const nm = String(state.playerNames[seatId - 1] || "").trim();
+      nameLine = (nm || `Player ${seatId}`).slice(0, 10);
+      const pk = state.playerOrderPlayerKeys?.[seatId - 1];
+      const pres = pk ? state.presenceByPlayerKey?.[pk] : null;
+      const online = pres?.online === true;
+      const lastSeen = typeof pres?.lastSeen === "number" ? pres.lastSeen : null;
+      if (!online && lastSeen) {
+        const msLeft = Math.max(0, (lastSeen + 30000) - Date.now());
+        const ss = String(Math.ceil(msLeft / 1000)).padStart(2, "0");
+        timerLine = `rejoin ${ss}s`;
+      }
+    }
+
     seat.innerHTML = `
       <div class="seat-number">P${seatId}</div>
-      ${state.onlineMode ? `<div class="text-[9px] opacity-80 leading-tight">${(state.playerNames[seatId - 1] || "").slice(0, 8)}</div>` : ""}
+      ${state.onlineMode ? `<div class="text-[9px] opacity-80 leading-tight">${nameLine}</div>` : ""}
+      ${state.onlineMode && timerLine ? `<div class="text-[9px] text-amber-300 leading-tight">${timerLine}</div>` : ""}
     `;
 
     dom.circle.appendChild(seat);
@@ -1713,6 +1929,7 @@ function startRound() {
       announcedRole: state.announcedRole,
       holderId: state.holderId,
       startedAtMs: Date.now(),
+      guessEndsAtMs: Date.now() + 30000,
       discussionEndsAtMs: null,
       lastUpdate: Date.now()
     };
@@ -1961,7 +2178,7 @@ function openRoleActionModal(roleName) {
       dom.roleModalResult.textContent = `P${p} is ${cat}. You steal 10 points.`;
       closeRoleModalThenOpenGuess();
     };
-    requestAnimationFrame(() => renderRoleSelectionCircle(1, true));
+    requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
   } else if (actionKey === "corrupter") {
     state.roleRequiredCount = 1;
     state.rolePendingApply = (sel) => {
@@ -1973,7 +2190,7 @@ function openRoleActionModal(roleName) {
       dom.roleModalResult.textContent = `P${p} is ${cat}. Penalty -${dmg}.`;
       closeRoleModalThenOpenGuess();
     };
-    requestAnimationFrame(() => renderRoleSelectionCircle(1, true));
+    requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
   } else if (actionKey === "hunter") {
     state.roleRequiredCount = 2;
     state.rolePendingApply = (sel) => {
@@ -1984,7 +2201,7 @@ function openRoleActionModal(roleName) {
       dom.roleModalResult.textContent = `Hunter struck P${strike}. ${cat === "LIGHT" ? "-30 applied." : "No damage (not Light)."}`;
       closeRoleModalThenOpenGuess();
     };
-    requestAnimationFrame(() => renderRoleSelectionCircle(2, true));
+    requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(2, true)));
   } else if (actionKey === "siphon") {
     const darkPlayers = [];
     for (let p = 1; p <= state.numPlayers; p++) {
@@ -2013,7 +2230,7 @@ function openRoleActionModal(roleName) {
       dom.roleModalResult.textContent = `Stole all points from P${t}.`;
       closeRoleModalThenOpenGuess();
     };
-    requestAnimationFrame(() => renderRoleSelectionCircle(1, true));
+    requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
     const tbtn = $("role-trigger-btn");
     if (tbtn) tbtn.classList.remove("hidden");
   } else {
@@ -2064,11 +2281,9 @@ function renderRoleSelectionCircle(requiredCount, selectable) {
   const instr = $("role-modal-instruction");
   if (instr) instr.textContent = `Select ${requiredCount} player(s), then click Apply Role.`;
 
-  const size = Math.max(
-    circle.getBoundingClientRect().width || 0,
-    circle.offsetWidth || 0,
-    288
-  );
+  // Ensure layout has settled before measuring to prevent first-render misplacement.
+  const rect = circle.getBoundingClientRect();
+  const size = Math.max(rect.width || 0, circle.offsetWidth || 0, 320);
   const radius = (size / 2) * 0.72;
   const cx = size / 2, cy = size / 2;
 
@@ -2308,6 +2523,8 @@ function submitPlayerGuess() {
     update(ref(window.db), updates);
 
     if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
+    const submitted = Object.keys(state.roundGuesses || {}).length;
+    showToast(`Waiting for others… (${submitted}/${state.numPlayers} submitted)`, 1800);
     return;
   }
 
@@ -2390,6 +2607,15 @@ function skipGuess() {
 }
 
 function useSpecialGuessCard() {
+  // Online SG: host-authoritative via RTDB (redemption only for now).
+  if (state.onlineMode) {
+    if (!state.roundInProgress || state.roundState?.phase !== "guessing") {
+      showToast("Start a round first.", 1600);
+      return;
+    }
+    show($("sg-modal"));
+    return;
+  }
   if (state.sgUsed) {
     dom.status.innerHTML = `SG card already used in this game.`;
     return;
@@ -2411,6 +2637,22 @@ function hideSgModal() {
 }
 
 function sgChooseRedemption() {
+  if (state.onlineMode) {
+    if (!window.db || !window.rtdb || !state.roomCode) return;
+    if (state.roundState?.phase !== "guessing") return;
+    const { ref, update } = window.rtdb;
+    const roundKey = `set${state.currentSet}_round${state.currentRound}`;
+    const updates = {};
+    updates[`rooms/${state.roomCode}/sg/${roundKey}/${state.myId}`] = {
+      type: "redemption",
+      delta: 20,
+      ts: Date.now()
+    };
+    update(ref(window.db), updates);
+    hideSgModal();
+    showToast("SG queued: Redemption (+20).", 1800);
+    return;
+  }
   state.playerScores[state.myId - 1] += 20;
   state.sgUsed = true;
   clampEliminations();
@@ -2420,6 +2662,11 @@ function sgChooseRedemption() {
 }
 
 function sgChooseDuel() {
+  if (state.onlineMode) {
+    showToast("Online SG duel is disabled (realtime upgrade).", 1800);
+    hideSgModal();
+    return;
+  }
   if (!state.roundInProgress) {
     dom.status.innerHTML = `Start a round first, then use SG duel.`;
     hideSgModal();
@@ -2796,7 +3043,12 @@ function calculateRound() {
       holderId,
       deltas: lastEntry ? [...lastEntry.deltas] : [],
       scoresAfter: [...state.playerScores],
-      playerNames: [...state.playerNames]
+      playerNames: [...state.playerNames],
+      roles: [...state.assignedRoles],
+      guesses: lastEntry ? [...(lastEntry.guesses || [])] : [],
+      reasons: lastEntry ? [...(lastEntry.reasons || [])] : [],
+      roleEvents: lastEntry ? (lastEntry.roleEvents || null) : null,
+      presence: state.presenceByPlayerKey || {}
     };
     updates[`rooms/${code}/roundHistory`] = state.roundHistory;
     update(ref(window.db), updates);
@@ -2922,6 +3174,30 @@ window.onload = () => {
       show($("multiplayer-screen"));
     }
   }
+
+  // Mobile sidebar toggle
+  const toggleBtn = $("mobile-sidebar-toggle");
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      const root = $("main-game");
+      if (!root) return;
+      root.classList.toggle("sidebar-open");
+    };
+  }
+
+  // Enter-to-send for chat fields.
+  ["chat-input", "main-chat-input", "main-chat-input-inline", "mp-lobby-chat-input"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (id === "chat-input") sendChatMessage();
+      else if (id === "main-chat-input") sendMainChatMessage();
+      else if (id === "main-chat-input-inline") sendMainChatMessageInline();
+      else if (id === "mp-lobby-chat-input") sendLobbyChatMessage();
+    });
+  });
 };
 </script>
 </body>
