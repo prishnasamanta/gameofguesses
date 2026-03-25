@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Room</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #0f172a; color: #e5e7eb; }
+    #frame { border: 0; width: 100%; height: 100%; display: block; }
+    #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading room...</div>
+  <iframe id="frame" allow="clipboard-read; clipboard-write" title="Room app"></iframe>
+  <script>
+    (function () {
+      try {
+        var code = (location.pathname || "/").replace(/^\/+/, "");
+        code = (code || "").toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) {
+          window.location.href = "/";
+          return;
+        }
+        var iframe = document.getElementById("frame");
+        var loading = document.getElementById("loading");
+        iframe.src = "/index1.html?room=" + encodeURIComponent(code);
+        iframe.addEventListener("load", function () {
+          if (loading) loading.style.display = "none";
+        });
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>
+

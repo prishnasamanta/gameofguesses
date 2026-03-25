@@ -1,0 +1,2928 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Game of Guesses – Simulation</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="./firebase-init.js"></script>
+<!-- Online scoring + role metadata -->
+<script src="./game/onlinePointCalculator.js"></script>
+<script src="./roles/YELLOW_Oracle.js"></script>
+<script src="./roles/PINK_Empath.js"></script>
+<script src="./roles/NEON_Illuminator.js"></script>
+<script src="./roles/GOLD_HighRoller.js"></script>
+<script src="./roles/LIME_Reflector.js"></script>
+<script src="./roles/ORANGE_Merchant.js"></script>
+<script src="./roles/GREEN_Corrupter.js"></script>
+<script src="./roles/BROWN_Executioner.js"></script>
+<script src="./roles/VIOLET_SoulSwapper.js"></script>
+<script src="./roles/SILVER_Alchemist.js"></script>
+<script src="./roles/RED_Hunter.js"></script>
+<script src="./roles/BLUE_Siphon.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --bg-dark: #0f172a;
+  --bg-panel: #111827;
+  --yellow-glow: #fbbf24;
+  --red-accent: #ef4444;
+  --green-accent: #22c55e;
+  --pink-accent: #ec4899;
+  --violet-accent: #a855f7;
+  --text-muted: #94a3b8;
+}
+
+body {
+  font-family: 'Press Start 2P', system-ui, sans-serif;
+  background: var(--bg-dark);
+  color: white;
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* CIRCLE TABLE */
+#role-modal-circle {
+  position: relative;
+  min-width: 16rem;
+  min-height: 16rem;
+}
+
+#circle-table {
+  position: relative;
+  width: min(90vw, 480px);
+  aspect-ratio: 1 / 1;
+  margin: 2rem auto;
+  border: clamp(12px, 4vw, 20px) solid var(--yellow-glow);
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #1f2937 20%, #111827 100%);
+  box-shadow: 0 0 60px rgba(251, 191, 36, 0.5),
+              inset 0 0 50px rgba(251, 191, 36, 0.25);
+  transition: transform 0.4s ease;
+}
+
+.player-seat {
+  position: absolute;
+  width: clamp(60px, 10vw, 82px);
+  height: clamp(60px, 10vw, 82px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(12px, 2.5vw, 15px);
+  font-weight: bold;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.85);
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+  text-shadow: 0 2px 10px black;
+}
+
+.player-seat:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 35px var(--yellow-glow);
+}
+.player-seat.my-seat {
+  border: 6px solid var(--yellow-glow);
+  box-shadow: 0 0 45px var(--yellow-glow);
+}
+
+.seat-info {
+  text-align: center;
+}
+.seat-number { font-size: 1.4em; line-height: 1; color: inherit; }
+.seat-role { font-size: 0.75em; opacity: 0.95; letter-spacing: 1px; color: inherit; text-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+
+.my-seat-glow {
+  box-shadow: 0 0 60px rgba(251, 191, 36, 0.45), 0 0 20px rgba(250, 204, 21, 0.35) !important;
+  transform: scale(1.06);
+}
+
+@keyframes rolePop {
+  from { transform: translateY(-40px) scale(0.92); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.role-banner {
+  animation: rolePop 0.7s ease-out;
+  will-change: transform, opacity;
+}
+
+/* Modal animation */
+@keyframes popIn {
+  from { transform: scale(0.78); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bgDrift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animated-main {
+  background: linear-gradient(120deg, #020617, #0f172a, #111827, #1e1b4b, #0f172a);
+  background-size: 260% 260%;
+  animation: bgDrift 14s ease infinite;
+}
+
+/* Mobile layout: prevent overflow, safe areas, readable modals */
+body {
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.modal, #guess-modal > div, #role-modal > div {
+  max-height: min(92vh, 920px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+.chat-input-row input {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 16px;
+}
+@media (max-width: 640px) {
+  #start-screen h1 { font-size: clamp(1.75rem, 10vw, 3rem); line-height: 1.15; }
+  #multiplayer-screen .flex.gap-3 { flex-wrap: wrap; justify-content: center; }
+  #main-game aside { padding: 1rem; }
+  #round-info { font-size: 0.7rem; line-height: 1.3; }
+}
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="start-screen" class="min-h-screen flex flex-col items-center justify-center gap-12 p-6">
+<h1 class="text-6xl md:text-9xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-yellow-400 to-green-400 text-center leading-tight">
+GAME OF<br>GUESSES
+</h1>
+<button onclick="selectMode()" class="px-16 py-10 bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 rounded-3xl text-4xl md:text-5xl font-bold shadow-2xl transform hover:scale-105 transition-all duration-300">
+PLAY WITH COMPUTER
+</button>
+<button onclick="startOnlineMode()" class="px-12 py-6 bg-gradient-to-br from-indigo-600 to-sky-700 hover:from-indigo-700 hover:to-sky-800 rounded-3xl text-2xl md:text-3xl font-bold shadow-2xl transform hover:scale-105 transition-all duration-300">
+PLAY MULTIPLAYER ONLINE
+</button>
+</div>
+
+<!-- PLAYER COUNT -->
+<div id="player-count-screen" class="hidden min-h-screen flex flex-col items-center justify-center gap-6 p-6">
+<h2 class="text-5xl md:text-6xl font-bold text-yellow-300 tracking-widest">PLAYER COUNT</h2>
+<div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
+  <label class="text-cyan-300 text-xs block mb-2">How many sets?</label>
+  <select id="set-count-select" class="bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm">
+    <option value="1">1 Set</option>
+    <option value="3">3 Sets</option>
+    <option value="5">5 Sets</option>
+    <option value="7">7 Sets</option>
+  </select>
+</div>
+<div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
+  <label class="text-cyan-300 text-xs block mb-2">How many players?</label>
+  <select id="player-count-select" class="bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm">
+    <option value="4">4 Players</option>
+    <option value="5">5 Players</option>
+    <option value="6">6 Players</option>
+    <option value="7">7 Players</option>
+    <option value="8">8 Players</option>
+    <option value="9">9 Players</option>
+    <option value="10">10 Players</option>
+    <option value="11">11 Players</option>
+    <option value="12">12 Players</option>
+  </select>
+</div>
+<label class="flex items-center gap-2 text-sm text-zinc-200">
+  <input id="till-result-toggle" type="checkbox" class="accent-cyan-500" />
+  Game till result (ignore fixed set limit)
+</label>
+<div class="text-center">
+  <button id="start-player-config-btn" onclick="startFromPlayerConfig()" class="px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold">Continue</button>
+</div>
+</div>
+
+<!-- MAIN GAME -->
+<div id="main-game" class="hidden flex flex-col md:flex-row min-h-screen">
+<!-- SIDEBAR -->
+<aside class="w-full md:w-80 bg-black border-b md:border-r border-red-600 p-6 flex flex-col">
+<div class="flex items-center gap-4 mb-10 justify-center md:justify-start">
+<div class="w-14 h-14 bg-gradient-to-br from-red-500 via-yellow-400 to-green-500 rounded-2xl flex items-center justify-center text-4xl shadow-inner">🎲</div>
+<div class="text-center md:text-left">
+<h1 class="text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-green-400">GAME OF</h1>
+<h1 class="text-3xl font-bold tracking-widest -mt-2 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-yellow-400">GUESSES</h1>
+</div>
+</div>
+<div id="sidebar-details">
+<div class="mb-8">
+<h2 onclick="toggleSection('colors-section')" class="cursor-pointer text-red-400 text-sm mb-4 flex items-center gap-2"><i class="fa-solid fa-palette"></i> COLORS</h2>
+<div id="colors-section" class="hidden">
+<div class="grid grid-cols-4 gap-3" id="color-list"></div>
+</div>
+</div>
+<div class="mb-8">
+<h2 onclick="toggleSection('roles-section')" class="cursor-pointer text-pink-400 text-sm mb-4 flex items-center gap-2"><i class="fa-solid fa-star"></i> ROLES</h2>
+<div id="roles-section" class="hidden">
+<div id="role-list" class="bg-zinc-900/80 p-4 rounded-xl border border-pink-500/30 space-y-3 max-h-[430px] overflow-auto"></div>
+</div>
+</div>
+<div class="flex-1 bg-zinc-900/60 rounded-xl p-5 border border-yellow-500/20 text-xs leading-relaxed">
+<h3 onclick="toggleSection('quick-rules-section')" class="cursor-pointer text-yellow-400 mb-3">QUICK RULES</h3>
+<ul id="quick-rules-section" class="list-disc list-inside space-y-2 hidden">
+<li>You only guess your own vote</li>
+<li>Others use role-based AI</li>
+<li>Special roles trigger when you hold color</li>
+<li>Only your score updates live</li>
+<li>Full reveal at end of set</li>
+<li><span class="text-pink-400">NO VOTE</span> → -25 pts</li>
+</ul>
+</div>
+</div>
+<button onclick="resetGame()" class="mt-6 bg-red-700 hover:bg-red-800 py-4 rounded-xl flex items-center justify-center gap-3 font-medium">
+<i class="fa-solid fa-rotate"></i> RESET GAME
+</button>
+</aside>
+
+<!-- GAME AREA -->
+<main class="flex-1 p-6 md:p-10 flex flex-col items-center animated-main">
+<div class="w-full max-w-5xl flex flex-col items-center gap-3 mb-4">
+<div id="round-info" class="bg-zinc-900 px-4 py-2 rounded-xl border border-yellow-500/40 text-yellow-300 font-bold text-sm md:text-base">
+SET 1 • ROUND 0 / ?
+</div>
+<div class="flex items-center gap-2">
+  <button onclick="startRound()" id="start-round-btn" class="bg-gradient-to-r from-yellow-400 to-red-500 hover:from-yellow-500 hover:to-red-600 text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition text-sm md:text-base">
+  <i class="fa-solid fa-play"></i> Start Round
+  </button>
+  <button onclick="showRulesModal()" id="rules-btn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2 rounded-xl font-bold text-xs md:text-sm shadow-lg transition">
+  Rules
+  </button>
+  <button id="chat-icon-btn" class="hidden bg-cyan-700 hover:bg-cyan-800 text-white px-3 py-2 rounded-xl text-xs font-bold">💬</button>
+</div>
+<div id="chat-timer-inline" class="hidden text-cyan-200 text-xs">Chat timer: 04:00</div>
+<button id="my-role-chip" onclick="showMyRoleInfo()" class="bg-zinc-900/90 border border-cyan-500/40 text-cyan-200 px-4 py-2 rounded-xl text-xs md:text-sm">
+  My Role: -
+</button>
+</div>
+<div id="circle-table" class="relative"></div>
+<div id="status-text" class="mt-4 w-full max-w-3xl text-center text-base md:text-lg min-h-[72px]"></div>
+</main>
+</div>
+
+<!-- MULTIPLAYER LOBBY -->
+<div id="multiplayer-screen" class="hidden min-h-screen flex flex-col items-center justify-center gap-6 p-6">
+  <h2 class="text-4xl md:text-5xl font-bold text-cyan-300">MULTIPLAYER LOBBY</h2>
+  <input id="mp-name-input" placeholder="Enter your name" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
+  <select id="mp-target-players" onchange="updateTargetPlayers()" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md">
+    <option value="4">4 Players</option>
+    <option value="5">5 Players</option>
+    <option value="6">6 Players</option>
+    <option value="7">7 Players</option>
+    <option value="8">8 Players</option>
+    <option value="9">9 Players</option>
+    <option value="10">10 Players</option>
+    <option value="11">11 Players</option>
+    <option value="12">12 Players</option>
+  </select>
+  <div class="flex gap-3">
+    <button onclick="backToStartFromLobby()" class="px-6 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 font-bold">← Back</button>
+    <button onclick="createRoom()" class="px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Create Room</button>
+    <button onclick="joinRoom()" class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 font-bold">Join Room</button>
+  </div>
+  <input id="mp-room-input" placeholder="Room code" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
+  <div id="mp-room-link" class="text-xs text-zinc-300"></div>
+  <div id="mp-players-list" class="bg-zinc-900/70 border border-cyan-500/30 rounded-xl p-4 w-full max-w-md text-sm"></div>
+  <div id="mp-waiting" class="text-xs text-cyan-200"></div>
+  <button id="mp-start-btn" onclick="startMultiplayerMatch()" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold opacity-50 cursor-not-allowed" disabled>Start Match</button>
+</div>
+
+<!-- GUESS MODAL -->
+<div id="guess-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
+<div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-yellow-400/40 modal">
+<div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ANNOUNCED COLOR</div>
+<div id="modal-announced-color" class="text-3xl md:text-4xl font-bold text-center mb-4 px-6 py-3 rounded-2xl inline-block mx-auto"></div>
+<p id="guess-instruction" class="text-center text-sm md:text-base mb-4 text-zinc-200">Click a seat on the table to guess.</p>
+<div id="guess-skill-info" class="text-center text-xs md:text-sm text-cyan-300 mb-3"></div>
+<div id="modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-6"></div>
+<div class="text-center mb-3">
+  <button onclick="submitPlayerGuess()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Submit Guess</button>
+</div>
+<div class="text-center text-xs md:text-sm text-zinc-300">
+  <button onclick="noVote()" class="underline decoration-red-400 hover:text-red-300">No vote (-25)</button>
+  <span class="mx-2 text-zinc-600">•</span>
+  <button id="skip-guess-btn" onclick="skipGuess()" class="underline decoration-amber-300 hover:text-amber-200 hidden">Skip guess (Double next)</button>
+  <span class="mx-2 text-zinc-600">•</span>
+  <button onclick="useSpecialGuessCard()" class="underline decoration-fuchsia-300 hover:text-fuchsia-200">SG Card</button>
+</div>
+</div>
+</div>
+
+<!-- ROLE MODAL -->
+<div id="role-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
+  <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-pink-400/40 modal">
+    <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ROLE ACTION</div>
+    <h2 id="role-modal-title" class="text-2xl md:text-3xl text-center mb-2">Role Action</h2>
+    <p id="role-modal-desc" class="text-center text-sm md:text-base mb-4 text-zinc-200"></p>
+    <div id="role-modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-4"></div>
+    <p id="role-modal-instruction" class="text-center text-xs md:text-sm text-zinc-300 mb-4">Select players on the table.</p>
+    <div class="text-center min-h-[42px]">
+      <div id="role-modal-result" class="text-sm md:text-base text-pink-300 font-bold"></div>
+    </div>
+    <div class="mt-4 text-center">
+      <button id="role-trigger-btn" onclick="triggerRoleClaim()" class="hidden px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold mr-2">Trigger Role</button>
+      <button id="role-apply-btn" onclick="applyRoleSelection()" class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold mr-2">Apply Role</button>
+      <button id="role-continue-btn" onclick="continueToGuessFromRole()" class="hidden px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Continue to Guess</button>
+    </div>
+  </div>
+</div>
+
+<!-- SG MODAL -->
+<div id="sg-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-xl border border-fuchsia-400/40">
+    <h2 class="text-2xl font-bold text-fuchsia-300 text-center mb-3">Special Guess Card</h2>
+    <p class="text-sm text-zinc-200 mb-4">
+      Once per game. Choose one option:
+    </p>
+    <div class="space-y-3">
+      <button onclick="sgChooseRedemption()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold">Option A: Redemption (+20)</button>
+      <button onclick="sgChooseDuel()" class="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-700 font-bold">Option B: Category Duel (L/D)</button>
+    </div>
+    <div id="sg-duel-panel" class="hidden mt-4 border border-violet-500/30 rounded-2xl p-4">
+      <div class="text-sm text-violet-200 mb-2">Pick target, then choose LIGHT or DARK, then submit.</div>
+      <div id="sg-duel-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-3"></div>
+      <div class="flex items-center justify-center gap-2 mb-3">
+        <button id="sg-guess-light" onclick="setSgCategory('LIGHT')" class="px-4 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-xs font-bold">LIGHT</button>
+        <button id="sg-guess-dark" onclick="setSgCategory('DARK')" class="px-4 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-xs font-bold">DARK</button>
+      </div>
+      <div class="text-center">
+        <button onclick="submitSgDuel()" class="px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold">Submit Duel</button>
+      </div>
+      <div id="sg-duel-result" class="text-center text-xs text-zinc-300 mt-2"></div>
+    </div>
+    <div class="mt-4 text-center">
+      <button onclick="hideSgModal()" class="text-zinc-300 underline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- RULES MODAL -->
+<div id="rules-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+  <div class="bg-zinc-900 rounded-3xl p-6 md:p-8 w-full max-w-3xl border border-cyan-400/40 max-h-[90vh] overflow-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-2xl md:text-3xl font-bold text-cyan-300">Point + Role Rules</h2>
+      <button onclick="hideRulesModal()" class="text-zinc-300 hover:text-white">✕</button>
+    </div>
+    <div id="rules-content" class="text-sm md:text-base text-zinc-200 leading-relaxed space-y-2"></div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div id="history-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-3xl border border-emerald-400/40 max-h-[90vh] overflow-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-2xl font-bold text-emerald-300">Set History</h2>
+      <button onclick="hideHistoryModal()" class="text-zinc-300 hover:text-white">✕</button>
+    </div>
+    <div id="history-content" class="text-sm text-zinc-200 space-y-3"></div>
+  </div>
+</div>
+
+<!-- ROUND DETAILS MODAL -->
+<div id="round-details-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-2xl border border-cyan-400/40 max-h-[90vh] overflow-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-2xl font-bold text-cyan-300">Round Details</h2>
+      <button onclick="hideRoundDetailsModal()" class="text-zinc-300 hover:text-white">✕</button>
+    </div>
+    <div id="round-details-content" class="text-sm text-zinc-200 space-y-2"></div>
+  </div>
+</div>
+
+<!-- CHAT MODAL -->
+<div id="chat-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-2xl border border-cyan-400/40">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-2xl font-bold text-cyan-300">Room Chat</h2>
+      <button onclick="hideChatModal()" class="text-zinc-300 hover:text-white">✕</button>
+    </div>
+    <div id="chat-log" class="bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 h-64 overflow-auto text-sm text-zinc-100 mb-3"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
+      <button type="button" onclick="sendChatMessage()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- MULTIPLAYER MAIN CHAT SPACE -->
+<div id="multiplayer-chat-space" class="hidden w-full max-w-3xl bg-zinc-900/70 border border-cyan-500/30 rounded-3xl p-4 mt-6">
+  <div class="text-cyan-300 font-bold mb-2">Room Chat</div>
+  <div id="main-chat-log" class="h-64 overflow-auto bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 text-sm mb-3"></div>
+  <div class="chat-input-row">
+    <input id="main-chat-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
+    <button type="button" onclick="sendMainChatMessage()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0">Send</button>
+  </div>
+</div>
+
+<script>
+// ==================== STATE & CONFIG ====================
+const state = {
+  numPlayers: 0,
+  myId: 0,
+  assignedRoles: [], // role names per player seat (index 0 => seat 1)
+  myScore: 0,
+  currentSet: 1,
+  currentRound: 0, // 0..numPlayers
+  announcedColor: "",
+  announcedRole: "",
+  holderId: 0,
+  playerGuess: null,
+  roundInProgress: false,
+
+  // AI planned guesses (seat => guessed holder seat). Used by Sensei / Guardian / Analyst.
+  plannedGuesses: [],
+  prevRoundGuesses: [],
+
+  // For roles
+  protectedId: null,
+  activeAbilityRole: null, // the role ability being executed this round for YOUR actions (after Mimic copying)
+  prevAnnouncedColor: null,
+  gambledSkipNextDouble: false,
+  sgUsed: false,
+  playerScores: [],
+  highRollerUsed: false,
+  highRollerGuesses: [],
+  empathPeekTarget: null,
+  roundHistory: [],
+  chatTimer: null,
+  gameTillResult: false,
+  violetTargetId: null,
+  gameOver: false,
+  roleRequiredCount: 0,
+  rolePendingApply: null,
+  onlineMode: false,
+  siphonUsed: false,
+  siphonArmed: false,
+  sgDuelTarget: null,
+  sgDuelCategory: null,
+  roomCode: "",
+  roomPlayers: [],
+  myName: "",
+  playerKey: "",
+  socket: null,
+  isHost: false,
+  chatPhaseActive: false,
+  // Online-only round synchronization (Firebase-driven).
+  roundState: null, // { phase, set, round, announcedColor, announcedRole, holderId, discussionEndsAtMs }
+  roundGuesses: {}, // { [seatIndex:number]: guessedSeatIndex:number|null }
+  lastRoundPhaseKey: "",
+  roundResolvedKey: "",
+  playerNames: [],
+  playerOrderSocketIds: [],
+  playerOrderPlayerKeys: [],
+  firebaseRoomUnsubscribe: null,
+  // For Phantasm flicker restore
+  seatBaseBgById: {},
+  seatBaseColorById: {}
+};
+
+// ==================== COLOR / ROLE CONFIG ====================
+// The user asked the "proper line" starting with GREEN then NEON.
+const colorOrder = ["GREEN", "NEON", "YELLOW", "PINK", "RED", "BLUE", "VIOLET", "LIME", "ORANGE", "BROWN", "SILVER", "GOLD"];
+
+// Color -> role (from your list)
+const roleByColor = {
+  YELLOW: { role: "The Oracle", desc: "Reveal Alignment: choose player Light/Dark; steal -10 from each chosen.", usage: "Every Round" },
+  PINK: { role: "The Empath", desc: "Sense Suspicion: see one target's guess after all submit.", usage: "Every Round" },
+  NEON: { role: "The Illuminator", desc: "Private Hint: know if your neighbors are same category (Yes/No).", usage: "Once per Round" },
+  GOLD: { role: "The High Roller", desc: "Double Guess: choose 2 targets; each -10, if correct extra -5. Silver hit: target -100, you +100.", usage: "Once per Set" },
+  LIME: { role: "The Reflector", desc: "Passive: if a Dark player guesses you, they get instant -15.", usage: "Passive" },
+  ORANGE: { role: "The Merchant", desc: "Passive: gains x2, losses x0.5; guessing Merchant gives extra negative.", usage: "Passive" },
+  GREEN: { role: "The Corrupter", desc: "Identify player: if Light then -10, if Dark then -5, self-target -15.", usage: "Every Round" },
+  BROWN: { role: "The Executioner", desc: "Death Mark: if marked target reaches -50 they eliminate; if +50 you eliminate.", usage: "Once per Set" },
+  VIOLET: { role: "The Soul Swapper", desc: "Point Swap: swap your total with one chosen player.", usage: "Once per Game" },
+  SILVER: { role: "The Alchemist", desc: "Gold Tarnish: special Gold interaction, +/-100 risk/reward conditions.", usage: "Once per Game" },
+  RED: { role: "The Hunter", desc: "Precise Strike: find 1 Light between 2 targets; strike for -30.", usage: "Once per Set" },
+  BLUE: { role: "The Siphon", desc: "Dark Knowledge: reveal Dark scores; steal all points from one Dark player.", usage: "Once per Game" }
+};
+
+// Role -> color hex (used for seat glow/hints)
+const colorHex = {
+  YELLOW: "#fbbf24",
+  PINK: "#ec4899",
+  NEON: "#a3e635",
+  GREEN: "#22c55e",
+  RED: "#ef4444",
+  BLUE: "#3b82f6",
+  VIOLET: "#a855f7",
+  LIME: "#84cc16",
+  ORANGE: "#f97316",
+  BROWN: "#a16207",
+  SILVER: "#cbd5e1",
+  GOLD: "#f59e0b"
+};
+
+// Build roles list for the sidebar (separate role list requested).
+const roles = colorOrder.map((color) => ({
+  color,
+  role: roleByColor[color].role,
+  desc: roleByColor[color].desc,
+  hex: colorHex[color]
+}));
+
+// Map role name -> hex (so existing code that assumes role->color works)
+const roleColorMap = {};
+for (const r of roles) roleColorMap[r.role] = r.hex;
+
+// Map role name -> color name
+const roleToColor = {};
+for (const r of roles) roleToColor[r.role] = r.color;
+
+const getContrastingText = (hex) => {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.slice(0, 2), 16) / 255;
+  const g = parseInt(c.slice(2, 4), 16) / 255;
+  const b = parseInt(c.slice(4, 6), 16) / 255;
+  // Relative luminance (approx)
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.6 ? "#000" : "#fff";
+};
+
+const roleActionByRoleName = {
+  "The Oracle": "oracle",
+  "The Empath": "empath",
+  "The Illuminator": "illuminator",
+  "The High Roller": "highroller",
+  "The Reflector": "reflector",
+  "The Merchant": "merchant",
+  "The Corrupter": "corrupter",
+  "The Executioner": "executioner",
+  "The Soul Swapper": "soulswapper",
+  "The Alchemist": "alchemist",
+  "The Hunter": "hunter",
+  "The Siphon": "siphon"
+};
+
+const colorCategory = {
+  YELLOW: "LIGHT",
+  PINK: "DARK",
+  NEON: "LIGHT",
+  GREEN: "LIGHT",
+  RED: "DARK",
+  BLUE: "DARK",
+  VIOLET: "DARK",
+  LIME: "LIGHT",
+  ORANGE: "LIGHT",
+  BROWN: "DARK",
+  SILVER: "LIGHT",
+  GOLD: "LIGHT"
+};
+
+// DOM references
+let dom = {
+  circle: null,
+  status: null,
+  roundInfo: null,
+  modal: null,
+  modalColor: null,
+  modalCircle: null,
+  startBtn: null,
+  roleModal: null,
+  roleModalTitle: null,
+  roleModalDesc: null,
+  roleModalCircle: null,
+  roleModalResult: null
+};
+
+// ==================== UTILITIES ====================
+const $ = id => document.getElementById(id);
+const hide = el => el.classList.add("hidden");
+const show = el => el.classList.remove("hidden");
+
+function getRoomCodeFromPath() {
+  // Expect: /ROOMCODE (e.g., /4BKZ3J)
+  const p = (location.pathname || "/").replace(/^\/+/, "");
+  const code = (p || "").toUpperCase();
+  if (!code) return "";
+  if (!/^[A-Z0-9]{4,10}$/.test(code)) return "";
+  return code;
+}
+
+function getRoomCodeFromQuery() {
+  try {
+    const params = new URLSearchParams(location.search || "");
+    const q = (params.get("room") || "").toUpperCase();
+    if (/^[A-Z0-9]{4,10}$/.test(q)) return q;
+  } catch (e) {}
+  return "";
+}
+
+function setRoomCodeInUrl(roomCode) {
+  if (!roomCode) return;
+  // Avoid iframe recursion: only update URL on the top window.
+  if (window.top !== window.self) return;
+  const code = String(roomCode).toUpperCase();
+  history.replaceState({}, "", `/${code}`);
+}
+
+function ensureLocalIdentity() {
+  const keyName = "gog_player_key";
+  const nameName = "gog_player_name";
+  let playerKey = localStorage.getItem(keyName) || "";
+  if (!playerKey) {
+    playerKey = `p_${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
+    localStorage.setItem(keyName, playerKey);
+  }
+  const playerName = localStorage.getItem(nameName) || "";
+  state.playerKey = playerKey;
+  state.myName = playerName;
+  return { playerKey, playerName };
+}
+
+function storePlayerName(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return;
+  localStorage.setItem("gog_player_name", trimmed);
+  state.myName = trimmed;
+}
+
+function generateDiscussionLine(guesses) {
+  const lines = [
+    "AI chat: 'I think P" + (Math.floor(Math.random() * state.numPlayers) + 1) + " looked suspicious.'",
+    "AI chat: 'Next round we should watch fast voters.'",
+    "AI chat: 'Holder may have baited with a self-pick.'"
+  ];
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+function startChatPhaseAfterRound() {
+  if (!state.onlineMode) {
+    const startBtn = $("start-round-btn");
+    startBtn.disabled = false;
+    startBtn.classList.remove("opacity-60");
+    const t = $("chat-timer-inline");
+    if (t) t.classList.add("hidden");
+    state.chatPhaseActive = false;
+    renderCircle();
+    return;
+  }
+
+  const defaultDiscussionSeconds = 240;
+  let timeLeft = defaultDiscussionSeconds;
+  const endsAtMs = state.roundState?.discussionEndsAtMs;
+  if (typeof endsAtMs === "number") {
+    timeLeft = Math.ceil((endsAtMs - Date.now()) / 1000);
+  }
+  if (!Number.isFinite(timeLeft) || timeLeft < 0) timeLeft = 0;
+  state.chatPhaseActive = true;
+  renderCircle();
+  const startBtn = $("start-round-btn");
+  startBtn.disabled = true;
+  startBtn.classList.add("opacity-60");
+  const timerInline = $("chat-timer-inline");
+  if (timerInline) timerInline.classList.remove("hidden");
+
+  const tick = () => {
+    const mm = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+    const ss = String(timeLeft % 60).padStart(2, "0");
+    if (timerInline) timerInline.textContent = `Chat timer: ${mm}:${ss}`;
+    timeLeft -= 1;
+    if (timeLeft < 0) {
+      startBtn.disabled = false;
+      startBtn.classList.remove("opacity-60");
+      if (timerInline) timerInline.classList.add("hidden");
+      state.chatPhaseActive = false;
+      renderCircle();
+
+      // Host updates phase so everyone (including after refresh) reconnects correctly.
+      if (state.isHost && window.db && window.rtdb && state.roomCode) {
+        const { ref, update } = window.rtdb;
+        const updates = {};
+        updates[`rooms/${state.roomCode}/roundState/phase`] = "next_ready";
+        updates[`rooms/${state.roomCode}/roundState/lastUpdate`] = Date.now();
+        update(ref(window.db), updates);
+      }
+      return;
+    }
+    state.chatTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+function endDiscussionNow(remote = false) {
+  if (state.chatTimer) {
+    clearTimeout(state.chatTimer);
+    state.chatTimer = null;
+  }
+  state.chatPhaseActive = false;
+  const timerInline = $("chat-timer-inline");
+  if (timerInline) timerInline.classList.add("hidden");
+  const startBtn = $("start-round-btn");
+  if (!state.onlineMode || state.isHost || remote) {
+    startBtn.disabled = false;
+    startBtn.classList.remove("opacity-60");
+  }
+  renderCircle();
+  if (!remote && state.onlineMode && state.isHost && window.db && window.rtdb && state.roomCode) {
+    const { ref, update } = window.rtdb;
+    const updates = {};
+    updates[`rooms/${state.roomCode}/roundState/phase`] = "next_ready";
+    updates[`rooms/${state.roomCode}/roundState/lastUpdate`] = Date.now();
+    update(ref(window.db), updates);
+  }
+}
+
+function showRulesModal() {
+  const content = $("rules-content");
+  content.innerHTML = `
+    <div><b>Core round points:</b> correct guess +5; if nobody guesses holder, holder gets +5 from each other; holder-picked player gets -5; catch/fail-catch bonuses applied.</div>
+    <div><b>After each round:</b> full summary shows everyone's guess, delta and total.</div>
+    <div class="mt-2"><b>Light roles:</b> YELLOW Oracle, PINK Empath, NEON Illuminator, GOLD High Roller, LIME Reflector, ORANGE Merchant.</div>
+    <div><b>Dark roles:</b> GREEN Corrupter, BROWN Executioner, VIOLET Soul Swapper, SILVER Alchemist, RED Hunter, BLUE Siphon.</div>
+    <div class="mt-2 text-zinc-400">Detailed role usage has been mapped into gameplay where possible in this simulation.</div>
+  `;
+  show($("rules-modal"));
+}
+
+function hideRulesModal() {
+  hide($("rules-modal"));
+}
+
+function toggleSidebarDetails() {
+  const box = $("sidebar-details");
+  if (!box) return;
+  box.classList.toggle("hidden");
+}
+
+function toggleSection(id) {
+  const el = $(id);
+  if (!el) return;
+  el.classList.toggle("hidden");
+}
+
+function startOnlineMode() {
+  state.onlineMode = true;
+  try {
+    ensureSocket();
+  } catch (e) {
+    console.error("Socket init failed", e);
+  }
+  const chatBtn = $("chat-icon-btn");
+  if (chatBtn) {
+    chatBtn.classList.remove("hidden");
+    chatBtn.onclick = showChatModal;
+  }
+  hide($("start-screen"));
+  show($("multiplayer-screen"));
+}
+
+function backToStartFromLobby() {
+  hide($("multiplayer-screen"));
+  show($("start-screen"));
+}
+
+function refreshRoomUi() {
+  $("mp-room-link").textContent = state.roomCode ? `Room: ${state.roomCode} (share this code)` : "";
+  $("mp-players-list").innerHTML = state.roomPlayers.length
+    ? `<b>Joined Players</b><br>${state.roomPlayers.map((n, i) => `${i + 1}. ${n || `Player ${i + 1}`}`).join("<br>")}`
+    : "No players yet.";
+  const target = parseInt($("mp-target-players").value || "4", 10);
+  $("mp-waiting").textContent = state.roomCode ? `Waiting: ${state.roomPlayers.length}/${target}` : "";
+  const startBtn = $("mp-start-btn");
+  const canStart = state.isHost && state.roomPlayers.length === target;
+  startBtn.disabled = !canStart;
+  startBtn.classList.toggle("opacity-50", !canStart);
+  startBtn.classList.toggle("cursor-not-allowed", !canStart);
+}
+
+function createRoom() {
+  ensureSocket();
+  const name = ($("mp-name-input").value || "").trim();
+  if (!name) return;
+  ensureLocalIdentity();
+  storePlayerName(name);
+  state.myName = name;
+  state.isHost = true;
+  state.socket.emit("create_room", {
+    name,
+    targetPlayers: parseInt($("mp-target-players").value || "4", 10),
+    playerKey: state.playerKey
+  });
+}
+
+function joinRoom() {
+  ensureSocket();
+  const name = ($("mp-name-input").value || "").trim();
+  const code = ($("mp-room-input").value || "").trim().toUpperCase();
+  if (!name || !code) return;
+  ensureLocalIdentity();
+  storePlayerName(name);
+  state.myName = name;
+  state.isHost = false;
+  state.socket.emit("join_room", { name, roomCode: code, playerKey: state.playerKey });
+}
+
+function startMultiplayerMatch() {
+  if (!state.roomCode || !state.isHost) return;
+  state.socket.emit("start_match", { roomCode: state.roomCode });
+}
+
+function updateTargetPlayers() {
+  if (!state.socket || !state.roomCode || !state.isHost) {
+    refreshRoomUi();
+    return;
+  }
+  state.socket.emit("set_target_players", {
+    roomCode: state.roomCode,
+    targetPlayers: parseInt($("mp-target-players").value || "4", 10)
+  });
+}
+
+function ensureSocket() {
+  if (state.socket) return;
+  if (typeof io === "undefined") {
+    throw new Error("Socket.IO client not loaded. Restart server and refresh.");
+  }
+  state.socket = io();
+  state.socket.on("room_error", ({ message }) => {
+    alert(message || "Room error");
+  });
+  state.socket.on("lobby_update", (payload) => {
+    state.roomCode = payload.roomCode;
+    state.roomPlayers = payload.players.map((p, i) => {
+      const nm = p && p.name != null ? String(p.name).trim() : "";
+      return nm || `Player ${i + 1}`;
+    });
+    state.isHost = payload.hostId === state.socket.id;
+    setRoomCodeInUrl(state.roomCode);
+    $("mp-target-players").value = String(payload.targetPlayers);
+    refreshRoomUi();
+    syncFirebaseLobbyRoom(payload);
+  });
+  state.socket.on("match_started", (payload) => {
+    if (payload.roomCode !== state.roomCode) return;
+    const myIdx = payload.playerOrder.indexOf(state.socket.id);
+    if (myIdx < 0) return;
+    state.playerOrderSocketIds = [...payload.playerOrder];
+    state.playerOrderPlayerKeys = Array.isArray(payload.playerKeysInSeat) ? [...payload.playerKeysInSeat] : [];
+    hide($("multiplayer-screen"));
+    startSimulation(payload.targetPlayers, {
+      myId: myIdx + 1,
+      assignedRoles: payload.assignedRoles,
+      playerNames: payload.playerNames
+    });
+    localStorage.setItem("gog_mySeatIndex", String(myIdx + 1));
+    if (state.isHost && window.db && window.rtdb) {
+      pushFirebaseMatchState(payload);
+    }
+    listenToFirebaseRoom(state.roomCode);
+  });
+  // Round flow is Firebase-driven in multiplayer now.
+  state.socket.on("round_started", () => {
+    if (!state.onlineMode) startRoundFromNetwork();
+  });
+  state.socket.on("discussion_ended", () => {
+    if (!state.onlineMode) endDiscussionNow(true);
+  });
+  state.socket.on("chat_message", ({ sender, text }) => {
+    if (window.db && state.roomCode) return;
+    const s = sender != null && String(sender).trim() !== "" ? String(sender).trim().slice(0, 40) : "Player";
+    const t = String(text ?? "");
+    appendChatLineToAllLogs(s, t);
+  });
+}
+
+function showChatModal() {
+  show($("chat-modal"));
+}
+
+function hideChatModal() {
+  hide($("chat-modal"));
+}
+
+function pushChatToFirebase(text) {
+  if (!window.db || !window.rtdb || !state.roomCode) return false;
+  const { ref, push } = window.rtdb;
+  push(ref(window.db, `rooms/${state.roomCode}/messages`), {
+    sender: getChatSenderLabel(),
+    text: text.slice(0, 300),
+    ts: Date.now()
+  });
+  return true;
+}
+
+function sendChatMessage() {
+  if (!state.roomCode) return;
+  const input = $("chat-input");
+  const text = (input.value || "").trim();
+  if (!text) return;
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
+  input.value = "";
+}
+
+function sendMainChatMessage() {
+  if (!state.roomCode) return;
+  const input = $("main-chat-input");
+  const text = (input.value || "").trim();
+  if (!text) return;
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
+  input.value = "";
+}
+
+function sendMainChatMessageInline() {
+  if (!state.roomCode) return;
+  const input = $("main-chat-input-inline");
+  const text = (input?.value || "").trim();
+  if (!text) return;
+  if (!pushChatToFirebase(text) && state.socket) {
+    state.socket.emit("chat_message", { roomCode: state.roomCode, sender: getChatSenderLabel(), text });
+  }
+  input.value = "";
+}
+
+function mirrorChatToInline() {
+  const src = $("main-chat-log");
+  const dst = $("main-chat-log-inline");
+  if (!src || !dst) return;
+  dst.innerHTML = src.innerHTML;
+  dst.scrollTop = dst.scrollHeight;
+}
+
+function syncMyScore() {
+  if (Array.isArray(state.playerScores) && state.playerScores.length >= state.myId) {
+    state.myScore = state.playerScores[state.myId - 1] || 0;
+  }
+  if (dom.circle) renderCircle();
+}
+
+function getPlayerCategory(playerId) {
+  const role = state.assignedRoles[playerId - 1];
+  const color = roleToColor[role];
+  return colorCategory[color] || "DARK";
+}
+
+function clampEliminations() {
+  for (let i = 0; i < state.playerScores.length; i++) {
+    const p = i + 1;
+    const minFloor = (state.violetTargetId === p) ? -50 : -250;
+    if (state.playerScores[i] < minFloor) state.playerScores[i] = minFloor;
+  }
+}
+
+function checkGameEndCriteria() {
+  const n = state.numPlayers;
+  if (!n) return null;
+  const threshold = 250 * n;
+  let lightSum = 0;
+  let darkSum = 0;
+  const activeCats = new Set();
+  for (let p = 1; p <= n; p++) {
+    const cat = getPlayerCategory(p);
+    activeCats.add(cat);
+    if (cat === "LIGHT") lightSum += state.playerScores[p - 1] || 0;
+    else darkSum += state.playerScores[p - 1] || 0;
+  }
+  if (activeCats.size === 1) {
+    const only = [...activeCats][0];
+    return `All remaining players are ${only}.`;
+  }
+  if (lightSum >= threshold) return `LIGHT combined score reached ${threshold}.`;
+  if (darkSum >= threshold) return `DARK combined score reached ${threshold}.`;
+  return null;
+}
+
+function showMyRoleInfo() {
+  const myRole = state.assignedRoles[state.myId - 1];
+  const roleEntry = roles.find((r) => r.role === myRole);
+  if (!myRole || !roleEntry) return;
+  alert(`${roleEntry.color} • ${roleEntry.role}\n\n${roleEntry.desc}`);
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function getChatSenderLabel() {
+  const n = String(state.myName || "").trim();
+  if (n) return n.slice(0, 24);
+  if (state.socket && state.socket.id) return `Player-${state.socket.id.slice(-4)}`;
+  return `P${state.myId || "?"}`;
+}
+
+function appendChatLineToAllLogs(sender, text) {
+  ["chat-log", "main-chat-log", "main-chat-log-inline"].forEach((id) => {
+    const log = $(id);
+    if (!log) return;
+    const row = document.createElement("div");
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "text-cyan-300";
+    nameSpan.textContent = `${sender}:`;
+    row.appendChild(nameSpan);
+    row.appendChild(document.createTextNode(` ${text}`));
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  });
+}
+
+function renderAllChatLogsFromMessages(messages) {
+  const entries = Object.entries(messages || {})
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const html = entries
+    .map((m) => {
+      const s = escapeHtml(m.sender || "Player");
+      const t = escapeHtml(m.text || "");
+      return `<div><span class="text-cyan-300">${s}:</span> ${t}</div>`;
+    })
+    .join("");
+  ["chat-log", "main-chat-log", "main-chat-log-inline"].forEach((id) => {
+    const el = $(id);
+    if (el) {
+      el.innerHTML = html;
+      el.scrollTop = el.scrollHeight;
+    }
+  });
+}
+
+function syncFirebaseLobbyRoom(payload) {
+  if (!window.db || !window.rtdb || !payload.roomCode) return;
+  const code = payload.roomCode;
+  const { ref, update } = window.rtdb;
+  const up = {};
+  if (state.isHost) {
+    up[`rooms/${code}/metadata`] = {
+      targetPlayers: payload.targetPlayers,
+      hostSocketId: payload.hostId,
+      updatedAt: Date.now()
+    };
+  }
+  // Use stable playerKey as RTDB key to avoid duplicates on refresh.
+  const key = state.playerKey || state.socket?.id?.slice(-6);
+  if (!key) return;
+  const selfSeat = Array.isArray(payload.players)
+    ? payload.players.find((p) => p && p.playerKey === key)
+    : null;
+  const seatIndex = typeof selfSeat?.seatIndex === "number" ? selfSeat.seatIndex : null;
+  up[`rooms/${code}/players/${key}`] = {
+    name: state.myName || "Player",
+    score: 0,
+    seatIndex
+  };
+  update(ref(window.db), up);
+  listenToFirebaseRoom(code);
+}
+
+function pushFirebaseMatchState(payload) {
+  const { ref, update, set } = window.rtdb;
+  const code = payload.roomCode;
+  const n = payload.targetPlayers;
+  const scores = new Array(n).fill(0);
+  const playerKeysInSeat = Array.isArray(payload.playerKeysInSeat) ? payload.playerKeysInSeat : [];
+  const playerNamesInSeat = Array.isArray(payload.playerNames) ? payload.playerNames : [];
+
+  // Overwrite players node so refresh never accumulates old socketIds.
+  const playersObj = {};
+  for (let seat = 0; seat < n; seat++) {
+    const key = playerKeysInSeat[seat];
+    if (!key) continue;
+    playersObj[key] = {
+      name: playerNamesInSeat[seat] || `Player ${seat + 1}`,
+      seatIndex: seat,
+      score: 0
+    };
+  }
+  set(ref(window.db, `rooms/${code}/players`), playersObj);
+
+  const updates = {};
+  updates[`rooms/${code}/match`] = {
+    // playerOrder keeps socket ids for socket.io; playerKeysInSeat is what RTDB uses.
+    playerOrder: payload.playerOrder,
+    playerKeysInSeat,
+    playerNames: playerNamesInSeat,
+    targetPlayers: n,
+    assignedRoles: payload.assignedRoles,
+    started: true,
+    createdAt: Date.now()
+  };
+  updates[`rooms/${code}/scores`] = scores;
+  updates[`rooms/${code}/gameState`] = {
+    currentSet: 1,
+    currentRound: 0,
+    announcedColor: "",
+    lastUpdate: Date.now()
+  };
+  update(ref(window.db), updates);
+}
+
+function normalizeRoundHistoryFromFirebase(val) {
+  if (!val) return;
+  if (Array.isArray(val)) {
+    state.roundHistory = val;
+    return;
+  }
+  if (typeof val === "object") {
+    state.roundHistory = Object.keys(val)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => val[k])
+      .filter(Boolean);
+  }
+}
+
+function listenToFirebaseRoom(roomCode) {
+  if (!window.db || !window.rtdb) return;
+  if (state.firebaseRoomUnsubscribe) {
+    state.firebaseRoomUnsubscribe();
+    state.firebaseRoomUnsubscribe = null;
+  }
+  const { ref, onValue } = window.rtdb;
+  const roomRef = ref(window.db, "rooms/" + roomCode);
+  state.firebaseRoomUnsubscribe = onValue(roomRef, (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    // Resume from an already-started Firebase match (refresh-safe).
+    if (
+      data.match &&
+      data.match.started &&
+      Array.isArray(data.match.assignedRoles) &&
+      data.match.assignedRoles.length > 0 &&
+      (!state.numPlayers || state.numPlayers === 0)
+    ) {
+      const targetPlayers = data.match.targetPlayers || data.match.assignedRoles.length;
+      const savedSeat = parseInt(localStorage.getItem("gog_mySeatIndex") || "0", 10);
+      const myId = savedSeat > 0 && savedSeat <= targetPlayers ? savedSeat : 1;
+
+      state.onlineMode = true;
+      if ($("multiplayer-screen")) hide($("multiplayer-screen"));
+      startSimulation(targetPlayers, {
+        myId,
+        assignedRoles: data.match.assignedRoles,
+        playerNames: data.match.playerNames || []
+      });
+      if (Array.isArray(data.match.playerKeysInSeat)) {
+        state.playerOrderPlayerKeys = [...data.match.playerKeysInSeat];
+      }
+    }
+
+    if (Array.isArray(data.scores) && data.scores.length > 0) {
+      if (!state.numPlayers || data.scores.length === state.numPlayers) {
+        state.playerScores = data.scores.map((s) => Number(s) || 0);
+      }
+    } else if (data.match && Array.isArray(data.match.playerKeysInSeat) && data.players) {
+      const keysInSeat = data.match.playerKeysInSeat;
+      state.playerOrderPlayerKeys = [...keysInSeat];
+      state.playerScores = keysInSeat.map((key, i) => {
+        const p = data.players?.[key];
+        return p && typeof p.score === "number" ? p.score : state.playerScores[i] ?? 0;
+      });
+    }
+
+    if (data.match && Array.isArray(data.match.playerNames) && data.match.playerNames.length) {
+      if (!state.numPlayers || data.match.playerNames.length === state.numPlayers) {
+        state.playerNames = [...data.match.playerNames];
+      }
+    }
+
+    if (data.gameState) {
+      if (typeof data.gameState.currentRound === "number") state.currentRound = data.gameState.currentRound;
+      if (typeof data.gameState.currentSet === "number") state.currentSet = data.gameState.currentSet;
+      if (data.gameState.announcedColor) state.announcedColor = data.gameState.announcedColor;
+    }
+
+    if (data.roundHistory != null) {
+      normalizeRoundHistoryFromFirebase(data.roundHistory);
+    }
+
+    if (data.messages) {
+      renderAllChatLogsFromMessages(data.messages);
+    }
+
+    syncMyScore();
+    if (typeof updateRoundInfo === "function" && dom.roundInfo) updateRoundInfo();
+    if (typeof renderCircle === "function" && dom.circle) renderCircle();
+
+    // Firebase-driven round synchronization (guessing -> discussion -> next_round_ready)
+    if (data.roundState && state.numPlayers > 0 && dom.circle) {
+      applyRoundStateFromFirebase(data.roundState, data.roundGuesses || {});
+    }
+  });
+}
+
+function applyRoundStateFromFirebase(roundState, roundGuesses) {
+  if (!roundState || !state.numPlayers) return;
+  state.roundState = roundState;
+  state.roundGuesses = roundGuesses || {};
+
+  const phaseKey = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}_${roundState.phase}`;
+  const lastKey = state.lastRoundPhaseKey || "";
+
+  const setNum = typeof roundState.set === "number" ? roundState.set : state.currentSet;
+  const roundNum = typeof roundState.round === "number" ? roundState.round : state.currentRound;
+
+  // Always keep the shared counters aligned.
+  if (typeof setNum === "number") state.currentSet = setNum;
+  if (typeof roundNum === "number") state.currentRound = roundNum;
+
+  const startBtn = $("start-round-btn");
+
+  if (roundState.phase === "guessing") {
+    state.roundInProgress = true;
+    state.chatPhaseActive = false;
+    if (dom.status) {
+      state.announcedColor = roundState.announcedColor || state.announcedColor;
+      state.announcedRole = roundState.announcedRole || state.announcedRole;
+      state.holderId = typeof roundState.holderId === "number" ? roundState.holderId : state.holderId;
+
+      updateRoundInfo();
+      const announcedHex = colorHex[state.announcedColor] || "#22c55e";
+      const announcedText = getContrastingText(announcedHex);
+      dom.status.innerHTML = `
+        <div class="text-amber-300 text-xl mb-4">ANNOUNCED COLOR</div>
+        <div class="inline-block px-10 py-5 text-5xl font-bold rounded-3xl mb-6" style="background:${announcedHex}; color:${announcedText}">
+          ${state.announcedColor}
+        </div>
+      `;
+    }
+
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.classList.add("opacity-60");
+    }
+
+    // Prepare plannedGuesses from Firebase only for host resolving. For everyone else it's populated at resolution time.
+    state.plannedGuesses = new Array(state.numPlayers).fill(null);
+
+    // If this is a fresh phase entry (not just new guesses), open/skip the guess modal.
+    if (phaseKey !== lastKey) {
+      hide(dom.modal);
+      const myGuess = state.roundGuesses[state.myId];
+      if (myGuess !== undefined) {
+        state.playerGuess = myGuess;
+        if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
+      } else {
+        // Info-role popups for UX.
+        const myRole = state.assignedRoles[state.myId - 1];
+        state.activeAbilityRole = myRole;
+        const actionKey = roleActionByRoleName[myRole];
+        if (actionKey === "empath") {
+          const target = (state.onlineMode && window.OnlinePointCalculator)
+            ? window.OnlinePointCalculator.getEmpathPeekTarget({
+                roomCode: state.roomCode,
+                set: setNum,
+                round: roundNum,
+                seatIndex: state.myId,
+                numPlayers: state.numPlayers
+              })
+            : Math.floor(Math.random() * state.numPlayers) + 1;
+          state.empathPeekTarget = target;
+          openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+          state.lastRoundPhaseKey = phaseKey;
+          return;
+        }
+        if (actionKey === "illuminator") {
+          const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
+          const right = (state.myId % state.numPlayers) + 1;
+          const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
+          const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
+          const same = leftCat === rightCat;
+          openInformationRoleModal(
+            "The Illuminator",
+            `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`
+          );
+          state.lastRoundPhaseKey = phaseKey;
+          return;
+        }
+
+        setTimeout(openGuessModal, 250);
+      }
+
+      state.lastRoundPhaseKey = phaseKey;
+    }
+
+    // Host resolves the round once every seat submitted.
+    if (state.isHost) {
+      const key = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}`;
+      const alreadyResolved = state.roundResolvedKey === key;
+      if (!alreadyResolved) {
+        let allSubmitted = true;
+        for (let seat = 1; seat <= state.numPlayers; seat++) {
+          if (state.roundGuesses[seat] === undefined) {
+            allSubmitted = false;
+            break;
+          }
+        }
+        if (allSubmitted) {
+          state.roundResolvedKey = key;
+          // Build full guesses map for calculateRound() from Firebase.
+          state.playerGuess = state.roundGuesses[state.myId] ?? null;
+          for (let seat = 1; seat <= state.numPlayers; seat++) {
+            if (seat === state.myId) continue;
+            state.plannedGuesses[seat - 1] = state.roundGuesses[seat] ?? null;
+          }
+
+          // Transition to discussion phase synchronously for everyone.
+          const discussionSeconds = 240;
+          const discussionEndsAtMs = Date.now() + discussionSeconds * 1000;
+          state.roundState.discussionEndsAtMs = discussionEndsAtMs;
+
+          if (window.db && window.rtdb && state.roomCode) {
+            const { ref, update } = window.rtdb;
+            const code = state.roomCode;
+            const updates = {};
+            updates[`rooms/${code}/roundState/phase`] = "discussion";
+            updates[`rooms/${code}/roundState/discussionEndsAtMs`] = discussionEndsAtMs;
+            updates[`rooms/${code}/roundState/lastUpdate`] = Date.now();
+            update(ref(window.db), updates);
+          }
+
+          // Hide guess modal and resolve.
+          if (dom.modal) hide(dom.modal);
+          calculateRound();
+        }
+      }
+    }
+    return;
+  }
+
+  if (roundState.phase === "discussion") {
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.classList.add("opacity-60");
+    }
+    // Everyone should start the shared timer after phase changes/reconnect.
+    // But if the host just resolved via calculateRound(), it will start the timer itself.
+    if (phaseKey !== lastKey) {
+      const roundKey = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}`;
+      if (!(state.isHost && state.roundResolvedKey === roundKey)) {
+        hide(dom.modal);
+        state.chatPhaseActive = true;
+        if (dom.status) {
+          dom.status.innerHTML = `Round ${state.currentRound} resolved. Discussion started.`;
+        }
+        state.lastRoundPhaseKey = phaseKey;
+        startChatPhaseAfterRound();
+      } else {
+        state.lastRoundPhaseKey = phaseKey;
+      }
+    }
+    return;
+  }
+
+  if (roundState.phase === "next_ready") {
+    state.chatPhaseActive = false;
+    if (startBtn) {
+      startBtn.disabled = !state.isHost;
+      startBtn.classList.toggle("opacity-60", !state.isHost);
+      startBtn.classList.toggle("cursor-not-allowed", !state.isHost);
+    }
+    state.lastRoundPhaseKey = phaseKey;
+    renderCircle();
+    return;
+  }
+}
+
+// ==================== RENDER ====================
+function renderCircle() {
+  if (state.onlineMode && state.roomCode && state.chatPhaseActive) {
+    dom.circle.innerHTML = `
+      <div class="absolute inset-0 flex items-center justify-center">
+        <div class="w-[92%] max-w-2xl bg-zinc-900/80 border border-cyan-400/40 rounded-3xl p-4">
+          <div class="text-cyan-300 font-bold mb-2 text-center">Room Chat</div>
+          <div id="main-chat-log-inline" class="h-64 overflow-auto bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 text-sm mb-3"></div>
+          <div class="chat-input-row">
+            <input id="main-chat-input-inline" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
+            <button type="button" onclick="sendMainChatMessageInline()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold shrink-0">Send</button>
+          </div>
+          ${state.isHost ? `<div class="text-center mt-3"><button onclick="endDiscussionNow()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">End Discussion Now</button></div>` : ""}
+        </div>
+      </div>
+    `;
+    mirrorChatToInline();
+    if (dom.status) dom.status.classList.add("hidden");
+    return;
+  }
+
+  dom.circle.innerHTML = `
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="px-6 py-3 rounded-2xl bg-black/35 border border-emerald-500/30 text-emerald-200 text-xs md:text-sm font-bold tracking-wide text-center">
+        <div class="text-[10px] md:text-xs text-zinc-300">MY TOTAL</div>
+        <div class="text-lg md:text-2xl text-emerald-300">${Math.round((state.myScore || 0) * 10) / 10}</div>
+      </div>
+    </div>
+  `;
+  const mainChat = $("multiplayer-chat-space");
+  if (mainChat) mainChat.classList.add("hidden");
+  if (dom.status) {
+    if (state.onlineMode) dom.status.classList.add("hidden");
+    else dom.status.classList.remove("hidden");
+  }
+  state.seatPositionsById = {};
+
+  const size = dom.circle.clientWidth || 480;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = cx * 0.72;
+
+  for (let i = 0; i < state.numPlayers; i++) {
+    const seatId = i + 1;
+    const angle = (i * (360 / state.numPlayers)) * (Math.PI / 180);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+
+    const seat = document.createElement("div");
+    seat.className = "player-seat";
+
+    const roleName = state.assignedRoles[i] || "Player";
+    const roleHex = roleColorMap[roleName] || "#555";
+
+    if (seatId === state.myId) {
+      seat.classList.add("my-seat");
+      seat.style.background = roleHex;
+      seat.style.color = getContrastingText(roleHex);
+    } else {
+      seat.style.background = "#1f2937";
+      seat.style.color = "#fff";
+    }
+
+    seat.dataset.baseBg = seat.style.background;
+    seat.dataset.baseColor = seat.style.color;
+
+    seat.innerHTML = `
+      <div class="seat-number">P${seatId}</div>
+      ${state.onlineMode ? `<div class="text-[9px] opacity-80 leading-tight">${(state.playerNames[seatId - 1] || "").slice(0, 8)}</div>` : ""}
+    `;
+
+    dom.circle.appendChild(seat);
+
+    // Position after append so we can measure actual seat size (fixes table alignment).
+    const seatSize = seat.getBoundingClientRect().width || 82;
+    seat.style.left = `${x - seatSize / 2}px`;
+    seat.style.top = `${y - seatSize / 2}px`;
+
+    state.seatPositionsById[seatId] = { x, y, topHalf: y < cy };
+  }
+}
+
+function renderColorList() {
+  const container = $("color-list");
+  container.innerHTML = "";
+  colorOrder.forEach((color) => {
+    const hex = colorHex[color];
+    const el = document.createElement("div");
+    el.className = "color-card w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shadow-inner";
+    el.style.background = hex;
+    el.style.color = getContrastingText(hex);
+    el.textContent = color.slice(0, 2);
+    container.appendChild(el);
+  });
+}
+
+function renderRoleList() {
+  const container = $("role-list");
+  container.innerHTML = "";
+  roles.forEach((r) => {
+    const el = document.createElement("div");
+    el.className = "flex items-start gap-3";
+    el.innerHTML = `
+      <div class="w-6 h-6 rounded-lg mt-1 flex-shrink-0" style="background:${r.hex}"></div>
+      <div class="min-w-0">
+        <div class="font-bold text-zinc-100 text-xs">${r.color}, ${r.role}</div>
+        <div class="text-zinc-300 text-[10px] leading-tight">${r.desc}</div>
+        <div class="text-cyan-300 text-[9px] mt-1">Usage: ${roleByColor[r.color].usage}</div>
+      </div>
+    `;
+    container.appendChild(el);
+  });
+}
+
+// ==================== GAME FLOW ====================
+function selectMode() {
+  hide($("start-screen"));
+  show($("player-count-screen"));
+}
+
+function startFromPlayerConfig() {
+  const n = parseInt($("player-count-select")?.value || "4", 10);
+  startSimulation(n);
+}
+
+function startSimulation(n, config = null) {
+  // Setup game
+  state.numPlayers = n;
+  state.myId = config?.myId || (Math.floor(Math.random() * n) + 1);
+
+  state.currentRound = 0;
+  state.myScore = 0;
+  state.currentSet = 1;
+  state.totalSets = parseInt($("set-count-select")?.value || "1", 10);
+  state.announcedColor = "";
+  state.announcedRole = "";
+  state.holderId = 0;
+  state.playerGuess = null;
+  state.roundInProgress = false;
+  state.plannedGuesses = [];
+  state.prevRoundGuesses = [];
+  state.prevAnnouncedColor = null;
+  state.protectedId = null;
+  state.activeAbilityRole = null;
+  state.gambledSkipNextDouble = false;
+  state.sgUsed = false;
+  state.gameTillResult = !!$("till-result-toggle")?.checked;
+  state.violetTargetId = null;
+  state.gameOver = false;
+  state.siphonUsed = false;
+  state.chatPhaseActive = false;
+  state.seatBaseBgById = {};
+  state.seatBaseColorById = {};
+
+  if (config?.assignedRoles && config.assignedRoles.length === n) {
+    state.assignedRoles = [...config.assignedRoles];
+  } else {
+    // Assign one role per announced color (so each round has a real holder).
+    const colorsForSet = colorOrder.slice(0, n);
+    const rolesToAssign = colorsForSet.map((c) => roleByColor[c].role);
+    // Shuffle roles across seats
+    for (let i = rolesToAssign.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rolesToAssign[i], rolesToAssign[j]] = [rolesToAssign[j], rolesToAssign[i]];
+    }
+    state.assignedRoles = rolesToAssign;
+  }
+  state.playerScores = new Array(n).fill(0);
+  state.highRollerUsed = false;
+  state.highRollerGuesses = [];
+  state.empathPeekTarget = null;
+  state.roundHistory = [];
+  state.playerNames = Array.from({ length: n }, (_, i) => `Player ${i + 1}`);
+  if (config?.playerNames && config.playerNames.length === n) {
+    state.playerNames = [...config.playerNames];
+  }
+
+  // Show game
+  hide($("player-count-screen"));
+  show($("main-game"));
+
+  dom.circle = $("circle-table");
+  dom.status = $("status-text");
+  dom.roundInfo = $("round-info");
+  dom.modal = $("guess-modal");
+  dom.modalColor = $("modal-announced-color");
+  dom.modalCircle = $("modal-circle");
+  dom.startBtn = $("start-round-btn");
+  dom.roleModal = $("role-modal");
+  dom.roleModalTitle = $("role-modal-title");
+  dom.roleModalDesc = $("role-modal-desc");
+  dom.roleModalCircle = $("role-modal-circle");
+  dom.roleModalResult = $("role-modal-result");
+
+  // Init button state (user must click to start each round)
+  const canControlRounds = !state.onlineMode || state.isHost;
+  dom.startBtn.disabled = !canControlRounds;
+  dom.startBtn.classList.toggle("opacity-50", !canControlRounds);
+  dom.startBtn.classList.toggle("cursor-not-allowed", !canControlRounds);
+  dom.startBtn.title = "";
+  const sgBtn = $("sg-btn");
+  if (sgBtn) {
+    sgBtn.disabled = false;
+    sgBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  }
+
+  renderColorList();
+  renderRoleList();
+  renderCircle();
+
+  dom.roundInfo.innerHTML = `SET ${state.currentSet} • ROUND 0 / ${state.numPlayers}`;
+  dom.status.innerHTML = "Click START ROUND to begin.";
+  state.myScore = state.playerScores[state.myId - 1] || 0;
+  syncMyScore();
+  const myRole = state.assignedRoles[state.myId - 1] || "-";
+  const chip = $("my-role-chip");
+  if (chip) chip.textContent = `My Role: ${myRole}`;
+}
+
+function updateRoundInfo() {
+  dom.roundInfo.innerHTML = `SET ${state.currentSet} • ROUND ${state.currentRound} / ${state.numPlayers}`;
+}
+
+function startRound() {
+  if (state.roundInProgress) return;
+  if (state.onlineMode && !state.isHost) return;
+  if (state.onlineMode && state.isHost && state.roomCode && window.db && window.rtdb) {
+    // Firebase-driven start: set shared roundState so all players (including refresh/reconnect)
+    // land on the same guessing phase.
+    // (We keep the local UI logic below so host sees it immediately.)
+  }
+  if (state.gameOver) {
+    showFinalBoard();
+    return;
+  }
+
+  if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
+    showFinalBoard();
+    return;
+  }
+
+  if (state.gameTillResult && state.currentRound >= state.numPlayers) {
+    state.currentRound = 0;
+    state.currentSet += 1;
+  }
+
+  const startBtn = $("start-round-btn");
+  startBtn.disabled = true;
+  startBtn.classList.add("opacity-60");
+
+  state.roundInProgress = true;
+  state.playerGuess = null;
+  state.protectedId = null;
+
+  state.currentRound++;
+  updateRoundInfo();
+
+  // Proper ordered colors (GREEN then NEON then ...).
+  state.announcedColor = colorOrder[state.currentRound - 1] || "GREEN";
+  state.announcedRole = roleByColor[state.announcedColor]?.role || "The Oracle";
+  renderCircle();
+
+  // Holder = the seat whose role matches the announced color's role.
+  const holderIdx = state.assignedRoles.findIndex((r) => r === state.announcedRole);
+  state.holderId = holderIdx >= 0 ? holderIdx + 1 : 1;
+
+  // Generate other players' planned guesses for Sensei / Guardian / Analyst.
+  // In online mode, guesses come from Firebase (host resolves once everyone submitted).
+  state.plannedGuesses = new Array(state.numPlayers).fill(null);
+
+  // High visibility pulse for holder seat
+  const myRole = state.assignedRoles[state.myId - 1];
+  if (state.myId === state.holderId) {
+    const mySeatEl = [...dom.circle.querySelectorAll(".player-seat")].find((el) => {
+      const n = parseInt(el.querySelector(".seat-number")?.textContent.replace("P", ""), 10);
+      return n === state.myId;
+    });
+    if (mySeatEl) {
+      mySeatEl.classList.add("my-seat-glow");
+      setTimeout(() => mySeatEl.classList.remove("my-seat-glow"), 900);
+    }
+  }
+
+  // Show announced color (same look as old; just uses color->hex correctly).
+  const announcedHex = colorHex[state.announcedColor];
+  const announcedText = getContrastingText(announcedHex);
+  dom.status.innerHTML = `
+    <div class="text-amber-300 text-xl mb-4">ANNOUNCED COLOR</div>
+    <div class="inline-block px-10 py-5 text-5xl font-bold rounded-3xl mb-6" style="background:${announcedHex}; color:${announcedText}">
+      ${state.announcedColor}
+    </div>
+  `;
+
+  // Host writes the shared roundState + clears roundGuesses early (before any role modal returns),
+  // so all clients reliably enter the same phase after refresh/reconnect.
+  if (state.onlineMode && state.isHost && window.db && window.rtdb && state.roomCode) {
+    const { ref, update } = window.rtdb;
+    const code = state.roomCode;
+    const updates = {};
+    updates[`rooms/${code}/gameState`] = {
+      currentSet: state.currentSet,
+      currentRound: state.currentRound,
+      announcedColor: state.announcedColor,
+      lastUpdate: Date.now()
+    };
+    updates[`rooms/${code}/roundState`] = {
+      phase: "guessing",
+      set: state.currentSet,
+      round: state.currentRound,
+      announcedColor: state.announcedColor,
+      announcedRole: state.announcedRole,
+      holderId: state.holderId,
+      startedAtMs: Date.now(),
+      discussionEndsAtMs: null,
+      lastUpdate: Date.now()
+    };
+    updates[`rooms/${code}/roundGuesses`] = {};
+    update(ref(window.db), updates);
+    // UI will be opened by applyRoundStateFromFirebase() from the Firebase update.
+    return;
+  }
+
+  state.activeAbilityRole = myRole;
+
+  if (state.activeAbilityRole) {
+    const actionKey = roleActionByRoleName[state.activeAbilityRole];
+    if (["oracle","corrupter","hunter","siphon","soulswapper","executioner"].includes(actionKey)) {
+      // In multiplayer, keep round resolution deterministic (host will resolve using submitted guesses).
+      // Let interactive role actions remain in single-player only for now.
+      if (!state.onlineMode) {
+        openRoleActionModal(state.activeAbilityRole);
+        return;
+      }
+      // Multiplayer: skip interactive role UI; host will resolve using submitted guesses.
+      setTimeout(openGuessModal, 1100);
+      return;
+    }
+    if (actionKey === "empath") {
+      const target = (state.onlineMode && window.OnlinePointCalculator)
+        ? window.OnlinePointCalculator.getEmpathPeekTarget({
+            roomCode: state.roomCode,
+            set: state.currentSet,
+            round: state.currentRound,
+            seatIndex: state.myId,
+            numPlayers: state.numPlayers
+          })
+        : Math.floor(Math.random() * state.numPlayers) + 1;
+      state.empathPeekTarget = target;
+      openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+      return;
+    } else if (actionKey === "illuminator") {
+      const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
+      const right = (state.myId % state.numPlayers) + 1;
+      const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
+      const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
+      const same = leftCat === rightCat;
+      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`);
+      return;
+    } else if (actionKey === "siphon") {
+      const darkPlayers = [];
+      for (let p = 1; p <= state.numPlayers; p++) {
+        if (getPlayerCategory(p) === "DARK") darkPlayers.push(`P${p}:${Math.round((state.playerScores[p - 1] || 0) * 10) / 10}`);
+      }
+      dom.status.innerHTML += `<div class="mt-3 text-blue-300 text-sm">Siphon Intel (Dark scores): ${darkPlayers.join(" | ") || "none"}</div>`;
+      if (!state.siphonUsed) {
+        const claim = confirm("Siphon claim skill now? Choose a DARK player to steal all their points.");
+        if (claim) {
+          const target = parseInt(prompt(`Enter DARK player id to steal (1-${state.numPlayers})`), 10);
+          if (target && target >= 1 && target <= state.numPlayers && getPlayerCategory(target) === "DARK" && target !== state.myId) {
+            state.playerScores[state.myId - 1] += state.playerScores[target - 1];
+            state.playerScores[target - 1] = 0;
+            state.siphonUsed = true;
+            syncMyScore();
+            dom.status.innerHTML += `<div class="mt-2 text-blue-200 text-xs">Siphon claimed: stole all points from P${target}.</div>`;
+          }
+        }
+      }
+    }
+  }
+
+  // If passive / Mimic with no previous round, go straight to guessing.
+  setTimeout(openGuessModal, 1100);
+}
+
+function startRoundFromNetwork() {
+  if (state.roundInProgress) return;
+  if (state.gameOver) return;
+  state.chatPhaseActive = false;
+  if (state.chatTimer) {
+    clearTimeout(state.chatTimer);
+    state.chatTimer = null;
+  }
+  renderCircle();
+  if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
+    showFinalBoard();
+    return;
+  }
+  if (state.gameTillResult && state.currentRound >= state.numPlayers) {
+    state.currentRound = 0;
+    state.currentSet += 1;
+  }
+  const startBtn = $("start-round-btn");
+  startBtn.disabled = !state.isHost;
+  startBtn.classList.toggle("opacity-60", !state.isHost);
+  state.roundInProgress = true;
+  state.playerGuess = null;
+  state.protectedId = null;
+  state.currentRound++;
+  updateRoundInfo();
+  state.announcedColor = colorOrder[state.currentRound - 1] || "GREEN";
+  state.announcedRole = roleByColor[state.announcedColor]?.role || "The Oracle";
+  renderCircle();
+  const holderIdx = state.assignedRoles.findIndex((r) => r === state.announcedRole);
+  state.holderId = holderIdx >= 0 ? holderIdx + 1 : 1;
+  state.plannedGuesses = new Array(state.numPlayers).fill(null);
+  for (let seat = 1; seat <= state.numPlayers; seat++) {
+    if (seat === state.myId) continue;
+    state.plannedGuesses[seat - 1] = Math.floor(Math.random() * state.numPlayers) + 1;
+  }
+  const announcedHex = colorHex[state.announcedColor];
+  const announcedText = getContrastingText(announcedHex);
+  dom.status.innerHTML = `
+    <div class="text-amber-300 text-xl mb-4">ANNOUNCED COLOR</div>
+    <div class="inline-block px-10 py-5 text-5xl font-bold rounded-3xl mb-6" style="background:${announcedHex}; color:${announcedText}">
+      ${state.announcedColor}
+    </div>
+  `;
+  const myRole = state.assignedRoles[state.myId - 1];
+  state.activeAbilityRole = myRole;
+  if (state.activeAbilityRole) {
+    const actionKey = roleActionByRoleName[state.activeAbilityRole];
+    if (["oracle","corrupter","hunter","siphon","soulswapper","executioner"].includes(actionKey)) {
+      openRoleActionModal(state.activeAbilityRole);
+      return;
+    }
+    if (actionKey === "empath") {
+      const target = (state.onlineMode && window.OnlinePointCalculator)
+        ? window.OnlinePointCalculator.getEmpathPeekTarget({
+            roomCode: state.roomCode,
+            set: state.currentSet,
+            round: state.currentRound,
+            seatIndex: state.myId,
+            numPlayers: state.numPlayers
+          })
+        : Math.floor(Math.random() * state.numPlayers) + 1;
+      state.empathPeekTarget = target;
+      openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+      return;
+    } else if (actionKey === "illuminator") {
+      const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
+      const right = (state.myId % state.numPlayers) + 1;
+      const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
+      const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
+      const same = leftCat === rightCat;
+      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`);
+      return;
+    }
+  }
+  setTimeout(openGuessModal, 600);
+}
+
+function showRoleBanner(roleObj) {
+  let html = `
+    <div class="role-banner bg-gradient-to-r from-pink-600 to-violet-700 text-white p-6 rounded-3xl text-center mb-8 shadow-2xl">
+      <div class="text-3xl mb-2">${roleObj.role} ACTIVATED</div>
+      <div class="text-sm opacity-90">${roleObj.desc}</div>
+    </div>
+  `;
+  dom.status.innerHTML += html;
+
+  // Trigger role actions
+  const role = roles.find(r => r.role === roleObj.role);
+  if (role) {
+    setTimeout(() => makeSeatsClickable(role.action), 300);
+  } else {
+    setTimeout(openGuessModal, 2200);
+  }
+}
+
+function makeSeatsClickable(actionType) {
+  document.querySelectorAll('.player-seat').forEach(seat => {
+    const num = parseInt(seat.querySelector('.seat-number')?.textContent.replace('P', ''));
+    if (isNaN(num) || num === state.myId) return;
+
+    seat.style.cursor = "pointer";
+    seat.onclick = () => {
+      if (actionType === "protect") {
+        alert(`You protect Player ${num} (+5 bonus if correct)`);
+        openGuessModal();
+      } else if (actionType === "reveal") {
+        const roleName = state.assignedRoles[num - 1];
+        alert(`Player ${num} has role ${roleName}`);
+        openGuessModal();
+      } else if (actionType === "sense") {
+        const roleName = state.assignedRoles[num - 1];
+        alert(`Player ${num} role is ${roleName}`);
+        openGuessModal();
+      } else if (actionType === "hint") {
+        // Show hint about two players
+        const p1 = Math.floor(Math.random() * state.numPlayers) + 1;
+        const p2 = Math.floor(Math.random() * state.numPlayers) + 1;
+        alert(`Hint: Player ${p1} and Player ${p2} have different roles`);
+        openGuessModal();
+      }
+    };
+  });
+}
+
+// ==================== ROLE MODAL (user actions) ====================
+function openInformationRoleModal(roleName, infoHtml) {
+  const roleObj = roles.find((r) => r.role === roleName);
+  dom.roleModalTitle.textContent = roleName;
+  dom.roleModalDesc.innerHTML = (roleObj?.desc ? `<p class="mb-3 text-zinc-200 text-sm">${escapeHtml(roleObj.desc)}</p>` : "") + infoHtml;
+  dom.roleModalResult.textContent = "";
+  dom.roleModalCircle.innerHTML = "";
+  dom.roleModalCircle.classList.add("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.add("hidden");
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.add("hidden");
+  const tbtn = $("role-trigger-btn");
+  if (tbtn) tbtn.classList.add("hidden");
+  const cbtn = $("role-continue-btn");
+  if (cbtn) cbtn.classList.remove("hidden");
+  show(dom.roleModal);
+}
+
+function openRoleActionModal(roleName) {
+  const roleObj = roles.find((r) => r.role === roleName);
+  dom.roleModalTitle.textContent = `${roleName.toUpperCase()} ACTIVATED`;
+  dom.roleModalDesc.textContent = roleObj?.desc || "";
+  dom.roleModalResult.textContent = "";
+  dom.roleModalCircle.innerHTML = "";
+  dom.roleModalCircle.classList.remove("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) {
+    instr.classList.remove("hidden");
+    instr.textContent = "Select players on the table.";
+  }
+  const cbtn = $("role-continue-btn");
+  if (cbtn) cbtn.classList.add("hidden");
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.remove("hidden");
+  state.roleSelection = [];
+  state.rolePendingApply = null;
+  state.roleRequiredCount = 0;
+
+  const actionKey = roleActionByRoleName[roleName];
+  // Ensure modal is visible before measuring/rendering circle, prevents first-frame cracked layout.
+  show(dom.roleModal);
+  if (actionKey === "oracle") {
+    state.roleRequiredCount = 1;
+    state.rolePendingApply = (sel) => {
+      const p = sel[0];
+      const targetColor = roleToColor[state.assignedRoles[p - 1]];
+      const cat = colorCategory[targetColor] || "DARK";
+      state.playerScores[p - 1] -= 10;
+      state.playerScores[state.myId - 1] += 10;
+      dom.roleModalResult.textContent = `P${p} is ${cat}. You steal 10 points.`;
+      closeRoleModalThenOpenGuess();
+    };
+    requestAnimationFrame(() => renderRoleSelectionCircle(1, true));
+  } else if (actionKey === "corrupter") {
+    state.roleRequiredCount = 1;
+    state.rolePendingApply = (sel) => {
+      const p = sel[0];
+      const cat = colorCategory[roleToColor[state.assignedRoles[p - 1]]] || "DARK";
+      let dmg = cat === "LIGHT" ? 10 : 5;
+      if (p === state.myId) dmg = 15;
+      state.playerScores[p - 1] -= dmg;
+      dom.roleModalResult.textContent = `P${p} is ${cat}. Penalty -${dmg}.`;
+      closeRoleModalThenOpenGuess();
+    };
+    requestAnimationFrame(() => renderRoleSelectionCircle(1, true));
+  } else if (actionKey === "hunter") {
+    state.roleRequiredCount = 2;
+    state.rolePendingApply = (sel) => {
+      const [a,b] = sel;
+      const strike = Math.random() < 0.5 ? a : b;
+      const cat = colorCategory[roleToColor[state.assignedRoles[strike - 1]]] || "DARK";
+      if (cat === "LIGHT") state.playerScores[strike - 1] -= 30;
+      dom.roleModalResult.textContent = `Hunter struck P${strike}. ${cat === "LIGHT" ? "-30 applied." : "No damage (not Light)."}`;
+      closeRoleModalThenOpenGuess();
+    };
+    requestAnimationFrame(() => renderRoleSelectionCircle(2, true));
+  } else if (actionKey === "siphon") {
+    const darkPlayers = [];
+    for (let p = 1; p <= state.numPlayers; p++) {
+      if (getPlayerCategory(p) === "DARK") darkPlayers.push(`P${p}:${Math.round((state.playerScores[p - 1] || 0) * 10) / 10}`);
+    }
+    dom.roleModalResult.textContent = `Dark scores: ${darkPlayers.join(" | ") || "none"}`;
+    state.siphonArmed = false;
+    state.roleRequiredCount = 1;
+    state.rolePendingApply = (sel) => {
+      if (!state.siphonArmed) {
+        dom.roleModalResult.textContent = `Press Trigger Role first.`;
+        return;
+      }
+      const t = sel[0];
+      if (getPlayerCategory(t) !== "DARK") {
+        dom.roleModalResult.textContent = `P${t} is not DARK. Choose DARK player.`;
+        return;
+      }
+      if (state.siphonUsed) {
+        dom.roleModalResult.textContent = `Siphon already used once this game.`;
+        return;
+      }
+      state.playerScores[state.myId - 1] += state.playerScores[t - 1];
+      state.playerScores[t - 1] = 0;
+      state.siphonUsed = true;
+      dom.roleModalResult.textContent = `Stole all points from P${t}.`;
+      closeRoleModalThenOpenGuess();
+    };
+    requestAnimationFrame(() => renderRoleSelectionCircle(1, true));
+    const tbtn = $("role-trigger-btn");
+    if (tbtn) tbtn.classList.remove("hidden");
+  } else {
+    dom.roleModalCircle.innerHTML = `
+      <div class="absolute inset-0 rounded-full border-4 border-yellow-400/70 shadow-[0_0_30px_rgba(251,191,36,0.35)]"></div>
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="px-3 py-1 rounded-xl bg-black/30 border border-yellow-500/30 text-amber-200/80 text-[10px] font-bold tracking-[0.28em]">ROUND TABLE</div>
+      </div>
+    `;
+    closeRoleModalThenOpenGuess();
+  }
+  // already shown above
+}
+
+function closeRoleModalThenOpenGuess() {
+  const btn = $("role-continue-btn");
+  if (btn) btn.classList.remove("hidden");
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.add("hidden");
+  const tbtn = $("role-trigger-btn");
+  if (tbtn) tbtn.classList.add("hidden");
+  syncMyScore();
+}
+
+function triggerRoleClaim() {
+  state.siphonArmed = true;
+  dom.roleModalResult.textContent = `Siphon armed. Select DARK player and click Apply Role.`;
+}
+
+function continueToGuessFromRole() {
+  const btn = $("role-continue-btn");
+  if (btn) btn.classList.add("hidden");
+  dom.roleModalCircle.classList.remove("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.remove("hidden");
+  hide(dom.roleModal);
+  openGuessModal();
+}
+
+function renderRoleSelectionCircle(requiredCount, selectable) {
+  const circle = dom.roleModalCircle;
+  circle.innerHTML = `
+    <div class="absolute inset-0 rounded-full border-4 border-yellow-400/70 shadow-[0_0_30px_rgba(251,191,36,0.35)]"></div>
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="px-3 py-1 rounded-xl bg-black/30 border border-yellow-500/30 text-amber-200/80 text-[10px] font-bold tracking-[0.28em]">ROUND TABLE</div>
+    </div>
+  `;
+  const instr = $("role-modal-instruction");
+  if (instr) instr.textContent = `Select ${requiredCount} player(s), then click Apply Role.`;
+
+  const size = Math.max(
+    circle.getBoundingClientRect().width || 0,
+    circle.offsetWidth || 0,
+    288
+  );
+  const radius = (size / 2) * 0.72;
+  const cx = size / 2, cy = size / 2;
+
+  const selectedSet = new Set(state.roleSelection || []);
+
+  for (let i = 0; i < state.numPlayers; i++) {
+    const seatId = i + 1;
+    const angle = (i * (360 / state.numPlayers)) * (Math.PI / 180);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+
+    const seat = document.createElement("div");
+    Object.assign(seat.style, {
+      position: "absolute",
+      left: `${x - 24}px`,
+      top: `${y - 24}px`,
+      width: "48px",
+      height: "48px",
+      borderRadius: "50%",
+      background: "#1f2937",
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "14px",
+      fontWeight: "bold",
+      border: selectedSet.has(seatId) ? "3px solid #f472b6" : "2px solid #475569",
+      cursor: selectable ? "pointer" : "default"
+    });
+
+    seat.textContent = `P${seatId}`;
+
+    // For visual clarity: your seat shows its true color.
+    if (seatId === state.myId) {
+      const trueRole = state.assignedRoles[i];
+      const hex = roleColorMap[trueRole] || "#22c55e";
+      seat.style.background = hex;
+      seat.style.color = getContrastingText(hex);
+      seat.style.border = selectedSet.has(seatId) ? "3px solid #f472b6" : "2px solid #facc15";
+    }
+
+    if (selectable) {
+      seat.onclick = () => {
+        const cur = state.roleSelection || [];
+        const has = cur.includes(seatId);
+        if (has) {
+          state.roleSelection = cur.filter((x) => x !== seatId);
+        } else {
+          if (cur.length >= requiredCount) return;
+          state.roleSelection = [...cur, seatId];
+        }
+
+        dom.roleModalResult.textContent = "";
+        renderRoleSelectionCircle(requiredCount, selectable);
+      };
+    }
+
+    circle.appendChild(seat);
+  }
+}
+
+function applyRoleSelection() {
+  if (!state.rolePendingApply) return;
+  const sel = state.roleSelection || [];
+  if (sel.length !== state.roleRequiredCount) {
+    dom.roleModalResult.textContent = `Select exactly ${state.roleRequiredCount} player(s).`;
+    return;
+  }
+  state.rolePendingApply([...sel]);
+}
+
+function highlightMainSeatColor(seatId, roleOrHexOrColorHex, trueColorName) {
+  const seatEl = [...dom.circle.querySelectorAll(".player-seat")].find((el) => {
+    const n = parseInt(el.querySelector(".seat-number")?.textContent.replace("P", ""), 10);
+    return n === seatId;
+  });
+  if (!seatEl) return;
+
+  // roleOrHexOrColorHex can be either roleName (to map to hex) or a hex directly.
+  const hex = roleColorMap[roleOrHexOrColorHex] || roleOrHexOrColorHex;
+  const text = getContrastingText(hex);
+
+  const baseBg = seatEl.dataset.baseBg || "#1f2937";
+  const baseColor = seatEl.dataset.baseColor || "#fff";
+
+  seatEl.style.background = hex;
+  seatEl.style.color = text;
+  seatEl.classList.add("my-seat-glow");
+
+  setTimeout(() => {
+    seatEl.style.background = baseBg;
+    seatEl.style.color = baseColor;
+    seatEl.classList.remove("my-seat-glow");
+  }, 2000);
+}
+
+function showAnalystInfo() {
+  const prev = state.prevRoundGuesses || [];
+  if (!prev.length || prev.every((x) => x === null || typeof x === "undefined")) {
+    dom.status.innerHTML += `<div class="mt-6 text-zinc-200 text-sm md:text-base font-bold">ANALYST: No previous round yet.</div>`;
+    return;
+  }
+
+  const counts = {};
+  prev.forEach((g) => {
+    if (g == null) return;
+    counts[g] = (counts[g] || 0) + 1;
+  });
+
+  const max = Math.max(...Object.values(counts));
+  const best = Object.keys(counts).filter((k) => counts[k] === max);
+  const mostGuessed = parseInt(best[Math.floor(Math.random() * best.length)], 10);
+
+  dom.status.innerHTML += `<div class="mt-6 text-emerald-300 text-sm md:text-base font-bold">ANALYST: Most guessed is Player ${mostGuessed}.</div>`;
+}
+
+function showScoutInfo() {
+  const nextRoundIndex = state.currentRound; // currentRound is 1-based after increment in startRound
+  if (nextRoundIndex >= state.numPlayers) {
+    dom.status.innerHTML += `<div class="mt-6 text-zinc-200 text-sm md:text-base font-bold">SCOUT: No next round.</div>`;
+    return;
+  }
+
+  const nextColor = colorOrder[nextRoundIndex];
+  const nextRole = roleByColor[nextColor]?.role;
+  const nextHolderIdx = state.assignedRoles.findIndex((r) => r === nextRole);
+  const nextHolderId = nextHolderIdx >= 0 ? nextHolderIdx + 1 : 1;
+
+  const pos = state.seatPositionsById[nextHolderId];
+  const half = pos && pos.topHalf ? "TOP" : "BOTTOM";
+  dom.status.innerHTML += `<div class="mt-6 text-pink-300 text-sm md:text-base font-bold">SCOUT: Next holder is in the ${half} half.</div>`;
+}
+
+function openGuessModal() {
+  // Set color for modal
+  const announcedHex = colorHex[state.announcedColor] || "#22c55e";
+  dom.modalColor.style.background = announcedHex;
+  dom.modalColor.style.color = getContrastingText(announcedHex);
+  dom.modalColor.textContent = state.announcedColor;
+  renderMiniCircle();
+  state.playerGuess = null;
+
+  // High Roller can skip guess button not used here; keep hidden by default.
+  const myRole = state.assignedRoles[state.myId - 1];
+  const skipBtn = $("skip-guess-btn");
+  if (myRole === "The High Roller" && !state.highRollerUsed) {
+    skipBtn.classList.remove("hidden");
+    skipBtn.textContent = "High Roller: Use 2 guesses";
+  } else {
+    skipBtn.classList.add("hidden");
+  }
+
+  const instr = $("guess-instruction");
+  if (instr) instr.textContent = "Click a seat to select guess, then press Submit Guess.";
+  const skill = $("guess-skill-info");
+  if (skill) {
+    const myRole = state.assignedRoles[state.myId - 1];
+    const roleEntry = roles.find((r) => r.role === myRole);
+    skill.textContent = roleEntry ? `Skill info: ${roleEntry.role} — ${roleEntry.desc}` : "";
+  }
+  show(dom.modal);
+}
+
+function renderMiniCircle() {
+  dom.modalCircle.innerHTML = `
+    <div class="absolute inset-0 rounded-full border-4 border-yellow-400/70 shadow-[0_0_30px_rgba(251,191,36,0.35)]"></div>
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="px-3 py-1 rounded-xl bg-black/30 border border-yellow-500/30 text-amber-200/80 text-[10px] font-bold tracking-[0.28em]">
+        ROUND TABLE
+      </div>
+    </div>
+  `;
+  const size = dom.modalCircle.clientWidth || 288;
+  const radius = (size / 2) * 0.72;
+  const cx = size / 2, cy = size / 2;
+  for (let i = 0; i < state.numPlayers; i++) {
+    const seatId = i + 1;
+    const angle = (i * (360 / state.numPlayers)) * (Math.PI / 180);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+
+    const seat = document.createElement("div");
+    Object.assign(seat.style, {
+      position: "absolute",
+      left: `${x - 24}px`,
+      top: `${y - 24}px`,
+      width: "48px",
+      height: "48px",
+      borderRadius: "50%",
+      background: "#1f2937",
+      color: "#fff",
+      border: "2px solid #475569",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "14px",
+      fontWeight: "bold"
+    });
+    seat.textContent = `P${seatId}`;
+    if (seatId === state.myId) {
+      const myHex = roleColorMap[state.assignedRoles[i]] || "#22c55e";
+      seat.style.background = myHex;
+      seat.style.color = getContrastingText(myHex);
+      seat.style.border = "2px solid #facc15";
+    }
+    if (state.playerGuess === seatId) {
+      seat.style.border = "3px solid #22d3ee";
+    }
+
+    seat.onclick = () => {
+      state.playerGuess = seatId;
+      renderMiniCircle();
+    };
+    dom.modalCircle.appendChild(seat);
+  }
+}
+
+function submitPlayerGuess() {
+  if (!state.playerGuess) return;
+  hide(dom.modal);
+
+  if (state.onlineMode) {
+    if (!state.roomCode || !window.db || !window.rtdb) return;
+    if (state.roundState?.phase !== "guessing") return;
+    // Prevent duplicate submissions.
+    if (state.roundGuesses && state.roundGuesses[state.myId] !== undefined) {
+      return;
+    }
+
+    const guess = state.playerGuess;
+    state.roundGuesses = { ...(state.roundGuesses || {}), [state.myId]: guess };
+
+    const { ref, update } = window.rtdb;
+    const updates = {};
+    updates[`rooms/${state.roomCode}/roundGuesses/${state.myId}`] = guess;
+    updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
+    update(ref(window.db), updates);
+
+    if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
+    return;
+  }
+
+  calculateRound();
+}
+
+function noVote() {
+  hide(dom.modal);
+  if (state.onlineMode) {
+    if (!state.roomCode || !window.db || !window.rtdb) return;
+    if (state.roundState?.phase !== "guessing") return;
+    if (state.roundGuesses && state.roundGuesses[state.myId] !== undefined) return;
+
+    const { ref, update } = window.rtdb;
+    const updates = {};
+    // RTDB treats `null` as delete. Use 0 as the "no vote" sentinel.
+    updates[`rooms/${state.roomCode}/roundGuesses/${state.myId}`] = 0;
+    updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
+    update(ref(window.db), updates);
+
+    if (dom.status) dom.status.innerHTML = `No vote submitted. Waiting for other guesses...`;
+    return;
+  }
+
+  let delta = -25;
+
+  // If Gambler skipped previous round, double THIS round's points.
+  if (state.gambledSkipNextDouble) {
+    delta *= 2;
+    state.gambledSkipNextDouble = false;
+  }
+
+  state.playerScores[state.myId - 1] += delta;
+  clampEliminations();
+  clampEliminations();
+  state.myScore = state.playerScores[state.myId - 1];
+  renderCircle();
+
+  // Previous round guesses: my seat is null because I didn't vote.
+  const prev = (state.plannedGuesses || []).slice();
+  prev[state.myId - 1] = null;
+  state.prevRoundGuesses = prev;
+  state.prevAnnouncedColor = state.announcedColor;
+
+  dom.status.innerHTML = `
+    Round ${state.currentRound} complete.<br>
+    <span class="text-4xl font-bold ${delta >= 0 ? "text-emerald-400" : "text-red-400"}">${delta >= 0 ? "+" : ""}${delta} pts</span><br>
+    Your total: <span class="text-xl">${state.myScore}</span>
+  `;
+
+  state.roundInProgress = false;
+  const startBtn = $("start-round-btn");
+  const endReason = checkGameEndCriteria();
+  if (endReason) {
+    state.gameOver = true;
+    dom.status.innerHTML += `<div class="mt-2 text-rose-300 text-xs">Game end condition: ${endReason}</div>`;
+    showFinalBoard();
+    return;
+  }
+
+  if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
+    startBtn.disabled = true;
+    showFinalBoard();
+  } else {
+    if (state.chatTimer) clearTimeout(state.chatTimer);
+    startChatPhaseAfterRound();
+  }
+}
+
+function skipGuess() {
+  const myRole = state.assignedRoles[state.myId - 1];
+  if (myRole !== "The High Roller") return;
+  if (state.highRollerUsed) return;
+  state.highRollerUsed = true;
+  const p2 = parseInt(prompt(`High Roller: enter second guess player (1-${state.numPlayers})`), 10);
+  if (!p2 || p2 < 1 || p2 > state.numPlayers) return;
+  state.highRollerGuesses = [state.playerGuess, p2].filter(Boolean);
+  const instr = $("guess-instruction");
+  if (instr) instr.textContent = `High Roller active: guesses set to P${state.highRollerGuesses.join(" & P")}.`;
+}
+
+function useSpecialGuessCard() {
+  if (state.sgUsed) {
+    dom.status.innerHTML = `SG card already used in this game.`;
+    return;
+  }
+  if (!state.numPlayers) {
+    dom.status.innerHTML = `Start game first to use SG card.`;
+    return;
+  }
+
+  state.sgDuelTarget = null;
+  state.sgDuelCategory = null;
+  $("sg-duel-result").textContent = "";
+  $("sg-duel-panel").classList.add("hidden");
+  show($("sg-modal"));
+}
+
+function hideSgModal() {
+  hide($("sg-modal"));
+}
+
+function sgChooseRedemption() {
+  state.playerScores[state.myId - 1] += 20;
+  state.sgUsed = true;
+  clampEliminations();
+  syncMyScore();
+  hideSgModal();
+  dom.status.innerHTML = `SG redeemed: <span class="text-emerald-400 font-bold">+20 pts</span>`;
+}
+
+function sgChooseDuel() {
+  if (!state.roundInProgress) {
+    dom.status.innerHTML = `Start a round first, then use SG duel.`;
+    hideSgModal();
+    return;
+  }
+  $("sg-duel-panel").classList.remove("hidden");
+  renderSgDuelCircle();
+}
+
+function renderSgDuelCircle() {
+  const circle = $("sg-duel-circle");
+  if (!circle) return;
+  circle.innerHTML = `
+    <div class="absolute inset-0 rounded-full border-4 border-yellow-400/70 shadow-[0_0_30px_rgba(251,191,36,0.35)]"></div>
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="px-3 py-1 rounded-xl bg-black/30 border border-yellow-500/30 text-amber-200/80 text-[10px] font-bold tracking-[0.28em]">ROUND TABLE</div>
+    </div>
+  `;
+  const size = Math.max(circle.getBoundingClientRect().width || 0, 240);
+  const radius = (size / 2) * 0.72;
+  const cx = size / 2, cy = size / 2;
+  for (let i = 0; i < state.numPlayers; i++) {
+    const id = i + 1;
+    const angle = (i * (360 / state.numPlayers)) * (Math.PI / 180);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    const seat = document.createElement("div");
+    Object.assign(seat.style, {
+      position: "absolute", left: `${x - 24}px`, top: `${y - 24}px`,
+      width: "48px", height: "48px", borderRadius: "50%",
+      background: "#1f2937", color: "#fff", border: id === state.sgDuelTarget ? "3px solid #22d3ee" : "2px solid #475569",
+      display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", cursor: id === state.myId ? "not-allowed" : "pointer"
+    });
+    seat.textContent = `P${id}`;
+    if (id === state.myId) { seat.style.opacity = "0.45"; }
+    seat.onclick = () => {
+      if (id === state.myId) return;
+      state.sgDuelTarget = id;
+      renderSgDuelCircle();
+    };
+    circle.appendChild(seat);
+  }
+}
+
+function setSgCategory(cat) {
+  state.sgDuelCategory = cat;
+  $("sg-guess-light").classList.toggle("bg-cyan-600", cat === "LIGHT");
+  $("sg-guess-dark").classList.toggle("bg-cyan-600", cat === "DARK");
+}
+
+function submitSgDuel() {
+  if (!state.roundInProgress) {
+    $("sg-duel-result").textContent = "Start a round first.";
+    return;
+  }
+  if (!state.sgDuelTarget) {
+    $("sg-duel-result").textContent = "Pick a target player.";
+    return;
+  }
+  if (!state.sgDuelCategory) {
+    $("sg-duel-result").textContent = "Pick LIGHT or DARK.";
+    return;
+  }
+  const target = state.sgDuelTarget;
+  const guess = state.sgDuelCategory;
+  const targetRole = state.assignedRoles[target - 1];
+  const targetColor = roleToColor[targetRole];
+  const actual = colorCategory[targetColor] || "DARK";
+  const ok = guess === actual;
+  const myDelta = ok ? 15 : -15;
+  const targetDelta = -myDelta;
+  state.playerScores[state.myId - 1] += myDelta;
+  state.playerScores[target - 1] += targetDelta;
+  state.sgUsed = true;
+  clampEliminations();
+  syncMyScore();
+  hideSgModal();
+  dom.status.innerHTML = `SG duel used (private result hidden). <span class="${myDelta >= 0 ? "text-emerald-400" : "text-red-400"} font-bold">${myDelta >= 0 ? "+" : ""}${myDelta}</span>`;
+}
+
+function calculateRound() {
+  const holderId = state.holderId;
+  const myRole = state.assignedRoles[state.myId - 1];
+
+  // Build full guess map for this round.
+  const guesses = new Array(state.numPlayers + 1).fill(null); // 1-based
+  for (let p = 1; p <= state.numPlayers; p++) {
+    if (p === state.myId) {
+      guesses[p] = state.playerGuess === 0 ? null : state.playerGuess;
+    } else {
+      let g = state.plannedGuesses[p - 1];
+      // Online "no vote" is stored as null in roundGuesses; keep it as null (do not randomize).
+      if (g === null || g === 0) {
+        guesses[p] = null;
+      } else if (g === undefined) {
+        // Single-player fallback: if no planned guess exists, generate one.
+        guesses[p] = Math.floor(Math.random() * state.numPlayers) + 1;
+      } else {
+        guesses[p] = g;
+      }
+    }
+  }
+
+  const holderPick = guesses[holderId]; // holder's selected target (can be self)
+  const correctGuessers = [];
+  for (let p = 1; p <= state.numPlayers; p++) {
+    if (p === holderId) continue;
+    if (guesses[p] === holderId) correctGuessers.push(p);
+  }
+
+  const hasAnyCorrect = correctGuessers.length >= 1;
+  const hasAtLeastTwoCorrect = correctGuessers.length >= 2;
+  const holderCaughtCorrect = correctGuessers.includes(holderPick);
+
+  let delta = 0;
+  const deltas = new Array(state.numPlayers).fill(0);
+  const reasons = new Array(state.numPlayers).fill("");
+
+  // Base: if at least one correct, each correct guesser gets +5.
+  if (hasAnyCorrect) {
+    correctGuessers.forEach((p) => {
+      deltas[p - 1] += 5;
+      reasons[p - 1] += "Correct holder guess +5. ";
+    });
+  }
+
+  // Base: if nobody guessed holder, holder gets +5 from each other player.
+  if (!hasAnyCorrect) {
+    deltas[holderId - 1] += 5 * (state.numPlayers - 1);
+    reasons[holderId - 1] += `No one guessed holder: +${5 * (state.numPlayers - 1)}. `;
+  }
+
+  // If nobody guessed holder, holder-picked player loses -5.
+  if (!hasAnyCorrect && holderPick) {
+    deltas[holderPick - 1] -= 5;
+    reasons[holderPick - 1] += "Holder selected you: -5. ";
+  }
+
+  // Catch effect: holder chose a correct guesser -> that player gets +5 bonus, holder -5.
+  if (hasAnyCorrect && holderCaughtCorrect) {
+    deltas[holderPick - 1] += 5;
+    reasons[holderPick - 1] += "Catch bonus +5. ";
+    deltas[holderId - 1] -= 5;
+    reasons[holderId - 1] += "Caught correct guesser: -5. ";
+  }
+
+  // If holder fails catch and at least 2 guessed correctly:
+  // each correct guesser gets +5 bonus, holder gets -5 per correct guesser.
+  if (hasAtLeastTwoCorrect && !holderCaughtCorrect) {
+    correctGuessers.forEach((p) => {
+      deltas[p - 1] += 5;
+      reasons[p - 1] += "2+ correct bonus +5. ";
+    });
+    deltas[holderId - 1] -= 5 * correctGuessers.length;
+    reasons[holderId - 1] += `Failed catch: -${5 * correctGuessers.length}. `;
+
+    // holder-picked wrong player gets -5 (including if holder picks self).
+    if (!correctGuessers.includes(holderPick)) {
+      deltas[holderPick - 1] -= 5;
+      reasons[holderPick - 1] += "Holder wrong-target penalty -5. ";
+    }
+  }
+
+  // Role adjustments that still apply with this system:
+  // Avenger: if holder is Avenger and you guessed holder correctly, you lose 10 extra.
+  const holderRole = state.assignedRoles[holderId - 1];
+  // New passive roles
+  for (let p = 1; p <= state.numPlayers; p++) {
+    const role = state.assignedRoles[p - 1];
+    const roleColor = roleToColor[role];
+    const cat = colorCategory[roleColor] || "DARK";
+    if (role === "The Reflector") {
+      for (let g = 1; g <= state.numPlayers; g++) {
+        if (g === p) continue;
+        if (guesses[g] === p) {
+          const gCat = colorCategory[roleToColor[state.assignedRoles[g - 1]]] || "DARK";
+          if (gCat === "DARK") {
+            deltas[g - 1] -= 15;
+            reasons[g - 1] += "Reflected by Reflector: -15. ";
+          }
+        }
+      }
+    }
+    if (role === "The Merchant") {
+      if (deltas[p - 1] > 0) deltas[p - 1] *= 2;
+      else if (deltas[p - 1] < 0) deltas[p - 1] *= 0.5;
+      reasons[p - 1] += "Merchant modifier applied. ";
+      for (let g = 1; g <= state.numPlayers; g++) {
+        if (guesses[g] === p) {
+          deltas[g - 1] -= 5;
+          reasons[g - 1] += "Guessed Merchant: extra -5. ";
+        }
+      }
+    }
+  }
+
+  let onlineRoleEvents = null;
+  if (state.onlineMode && window.OnlinePointCalculator) {
+    const r = window.OnlinePointCalculator.computeOnlineRoleEffects({
+      numPlayers: state.numPlayers,
+      assignedRoles: state.assignedRoles,
+      guesses,
+      holderId,
+      announcedColor: state.announcedColor,
+      roomCode: state.roomCode,
+      set: state.currentSet,
+      round: state.currentRound,
+      roleToColor,
+      colorCategory,
+      myId: state.myId
+    });
+
+    onlineRoleEvents = r.roleEventsByPlayer;
+    for (let p = 1; p <= state.numPlayers; p++) {
+      deltas[p - 1] += r.deltasAdjust[p - 1] || 0;
+      reasons[p - 1] += r.reasonsAdjust[p - 1] || "";
+    }
+
+    // Ensure Empath reveal uses the computed target.
+    const myRoleNow = state.assignedRoles[state.myId - 1];
+    if (myRoleNow === "The Empath") {
+      const myEv = onlineRoleEvents?.[state.myId - 1]?.empath;
+      if (myEv?.peekTarget) state.empathPeekTarget = myEv.peekTarget;
+    }
+  } else {
+    // Offline: High Roller second guess effects for user only.
+    if (myRole === "The High Roller" && state.highRollerGuesses.length === 2) {
+      const [g1, g2] = state.highRollerGuesses;
+      [g1, g2].forEach((g) => {
+        if (g && g !== state.myId) {
+          deltas[g - 1] -= 10;
+          reasons[g - 1] += "High Roller targeted: -10. ";
+          if (g === holderId) {
+            deltas[g - 1] -= 5;
+            reasons[g - 1] += "High Roller correct extra: -5. ";
+          }
+        }
+      });
+      if (state.announcedColor === "SILVER" && (g1 === holderId || g2 === holderId)) {
+        deltas[holderId - 1] -= 100;
+        deltas[state.myId - 1] += 100;
+        reasons[state.myId - 1] += "Silver jackpot +100. ";
+        reasons[holderId - 1] += "Silver jackpot -100. ";
+      }
+    }
+
+    // Offline: Simulate computer role triggers so bots also use roles.
+    for (let p = 1; p <= state.numPlayers; p++) {
+      if (p === state.myId) continue;
+      const role = state.assignedRoles[p - 1];
+      if (role === "The Oracle") {
+        const t = Math.floor(Math.random() * state.numPlayers) + 1;
+        if (t !== p) {
+          deltas[t - 1] -= 10;
+          deltas[p - 1] += 10;
+          reasons[p - 1] += `Oracle stole 10 from P${t}. `;
+        }
+      } else if (role === "The Corrupter") {
+        const t = Math.floor(Math.random() * state.numPlayers) + 1;
+        const cat = colorCategory[roleToColor[state.assignedRoles[t - 1]]] || "DARK";
+        const dmg = t === p ? 15 : (cat === "LIGHT" ? 10 : 5);
+        deltas[t - 1] -= dmg;
+        reasons[p - 1] += `Corrupter hit P${t} (-${dmg}). `;
+      } else if (role === "The Hunter") {
+        const a = Math.floor(Math.random() * state.numPlayers) + 1;
+        const b = Math.floor(Math.random() * state.numPlayers) + 1;
+        const strike = Math.random() < 0.5 ? a : b;
+        const cat = colorCategory[roleToColor[state.assignedRoles[strike - 1]]] || "DARK";
+        if (cat === "LIGHT") {
+          deltas[strike - 1] -= 30;
+          reasons[p - 1] += `Hunter struck P${strike} (-30). `;
+        }
+      }
+    }
+  }
+
+  // No-vote players (guesses[p] === null) only take the -25 penalty.
+  // This matches the single-player `noVote()` behavior without forcing them into random guesses.
+  for (let p = 1; p <= state.numPlayers; p++) {
+    if (guesses[p] === null) {
+      deltas[p - 1] -= 25;
+      reasons[p - 1] += "No vote penalty -25. ";
+    }
+  }
+
+  // Apply deltas to all players.
+  for (let p = 1; p <= state.numPlayers; p++) {
+    state.playerScores[p - 1] += deltas[p - 1];
+  }
+  delta = deltas[state.myId - 1];
+  state.myScore = state.playerScores[state.myId - 1];
+
+  // Store previous round guesses for Analyst role.
+  const prev = guesses.slice(1);
+  state.prevRoundGuesses = prev;
+  state.prevAnnouncedColor = state.announcedColor;
+
+  let summaryHtml = "";
+  for (let p = 1; p <= state.numPlayers; p++) {
+    summaryHtml += `<div class="text-xs md:text-sm">P${p}: guessed P${guesses[p] ?? "-"} | Δ ${deltas[p - 1] >= 0 ? "+" : ""}${Math.round(deltas[p - 1] * 10) / 10} | total ${Math.round(state.playerScores[p - 1] * 10) / 10}</div>`;
+  }
+  const empathExtra = (state.activeAbilityRole === "The Empath" && state.empathPeekTarget)
+    ? `<div class="mt-2 text-pink-300 text-xs">Empath reveal: P${state.empathPeekTarget} guessed P${guesses[state.empathPeekTarget]}.</div>`
+    : "";
+  dom.status.innerHTML = `
+    <div class="text-lg font-bold text-amber-300 mb-2">Round ${state.currentRound} summary</div>
+    <div class="mt-2"><button onclick="showRoundDetailsModal(${state.currentRound - 1})" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button></div>
+    ${empathExtra}
+    <div class="mt-2 text-zinc-300 text-xs">Discussion: ${generateDiscussionLine(guesses)}</div>
+  `;
+  syncMyScore();
+  state.roundHistory.push({
+    set: state.currentSet,
+    round: state.currentRound,
+    announcedColor: state.announcedColor,
+    holderId,
+    guesses: guesses.slice(1),
+    deltas: [...deltas],
+    reasons: [...reasons],
+    roles: [...state.assignedRoles],
+    scores: [...state.playerScores],
+    roleEvents: onlineRoleEvents
+  });
+
+  state.roundInProgress = false;
+  const startBtn = $("start-round-btn");
+  startBtn.disabled = false;
+  startBtn.classList.remove("opacity-60");
+
+  const endReason = checkGameEndCriteria();
+  if (endReason) {
+    state.gameOver = true;
+    showFinalBoard(endReason);
+    return;
+  }
+
+  if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
+    showFinalBoard();
+    return;
+  }
+
+  if (state.chatTimer) clearTimeout(state.chatTimer);
+  startChatPhaseAfterRound();
+
+  if (state.isHost && window.db && window.rtdb && state.roomCode && state.onlineMode) {
+    const { ref, update } = window.rtdb;
+    const code = state.roomCode;
+    const updates = {};
+    updates[`rooms/${code}/scores`] = [...state.playerScores];
+    if (Array.isArray(state.playerOrderPlayerKeys) && state.playerOrderPlayerKeys.length) {
+      state.playerOrderPlayerKeys.forEach((pk, idx) => {
+        if (!pk) return;
+        updates[`rooms/${code}/players/${pk}/score`] = state.playerScores[idx] ?? 0;
+      });
+    } else if (Array.isArray(state.playerOrderSocketIds)) {
+      // Backward compatibility (older saved sessions).
+      state.playerOrderSocketIds.forEach((sid, idx) => {
+        if (!sid) return;
+        updates[`rooms/${code}/players/${sid}/score`] = state.playerScores[idx] ?? 0;
+      });
+    }
+    updates[`rooms/${code}/gameState`] = {
+      currentSet: state.currentSet,
+      currentRound: state.currentRound,
+      announcedColor: state.announcedColor,
+      lastUpdate: Date.now()
+    };
+    const histKey = `set${state.currentSet}_round${state.currentRound}`;
+    const lastEntry = state.roundHistory[state.roundHistory.length - 1];
+    updates[`rooms/${code}/history/byRound/${histKey}`] = {
+      set: state.currentSet,
+      round: state.currentRound,
+      announcedColor: state.announcedColor,
+      holderId,
+      deltas: lastEntry ? [...lastEntry.deltas] : [],
+      scoresAfter: [...state.playerScores],
+      playerNames: [...state.playerNames]
+    };
+    updates[`rooms/${code}/roundHistory`] = state.roundHistory;
+    update(ref(window.db), updates);
+  }
+}
+
+function showFinalBoard(reason = "") {
+  const sgBtn = $("sg-btn");
+  if (sgBtn) {
+    sgBtn.disabled = true;
+    sgBtn.classList.add("opacity-50", "cursor-not-allowed");
+  }
+
+  let html = "";
+  for (let i = 1; i <= state.numPlayers; i++) {
+    const role = state.assignedRoles[i - 1];
+    const score = Array.isArray(state.playerScores) ? (state.playerScores[i - 1] ?? 0) : (i === state.myId ? state.myScore : 0);
+    html += `
+      <div class="flex items-center gap-6 bg-zinc-800/90 rounded-3xl p-6 border ${i===state.myId?'border-yellow-400':''}">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black" style="background:${roleColorMap[role]}; color:${getContrastingText(roleColorMap[role])}">
+          P${i}
+        </div>
+        <div class="flex-1"><div class="text-2xl">${role}</div></div>
+        <div class="text-4xl font-black text-emerald-400">${score}</div>
+      </div>`;
+  }
+  dom.status.innerHTML = `
+    <h2 class="text-5xl font-bold text-emerald-400 text-center mb-10">SET COMPLETE!</h2>
+    ${reason ? `<div class="text-center text-rose-300 mb-4">${reason}</div>` : ""}
+    <div class="space-y-6 max-w-3xl mx-auto">${html}</div>
+    <div class="mt-12 flex flex-col sm:flex-row flex-wrap justify-center items-stretch gap-4 max-w-3xl mx-auto px-2">
+      <button onclick="startNewSet()" class="px-8 sm:px-12 py-5 sm:py-6 bg-emerald-600 hover:bg-emerald-700 rounded-3xl text-lg sm:text-xl font-bold shadow-xl transition">NEW SET</button>
+      <button onclick="showHistoryModal()" class="px-8 sm:px-12 py-5 sm:py-6 bg-cyan-700 hover:bg-cyan-800 rounded-3xl text-lg sm:text-xl font-bold transition">HISTORY</button>
+      <button onclick="location.reload()" class="px-8 sm:px-12 py-5 sm:py-6 bg-zinc-700 hover:bg-zinc-800 rounded-3xl text-lg sm:text-xl font-bold transition">END GAME</button>
+    </div>
+  `;
+}
+
+function showHistoryModal() {
+  const box = $("history-content");
+  if (!box) return;
+  if (!state.roundHistory.length) {
+    box.innerHTML = `<div>No rounds logged yet.</div>`;
+  } else {
+    box.innerHTML = state.roundHistory.map((r) => {
+      const lines = r.guesses.map((g, idx) => {
+        const p = idx + 1;
+        const reason = (r.reasons[idx] || "").trim() || "No special trigger.";
+        const sc = Array.isArray(r.scores) ? r.scores[idx] : 0;
+        return `<div class="text-xs">P${p} (${r.roles[idx]}): guessed P${g ?? "-"} | Δ ${r.deltas[idx] >= 0 ? "+" : ""}${Math.round(r.deltas[idx]*10)/10} | total ${Math.round(sc*10)/10} | ${reason}</div>`;
+      }).join("");
+      return `<div class="bg-zinc-800/70 rounded-xl p-3 border border-zinc-700"><div class="font-bold text-amber-300 mb-2">Set ${r.set ?? "?"} • Round ${r.round} • Color ${r.announcedColor} • Holder P${r.holderId}</div>${lines}</div>`;
+    }).join("");
+  }
+  show($("history-modal"));
+}
+
+function hideHistoryModal() {
+  hide($("history-modal"));
+}
+
+function showRoundDetailsModal(roundIndex) {
+  const item = state.roundHistory[roundIndex];
+  if (!item) return;
+  const box = $("round-details-content");
+  box.innerHTML = item.guesses.map((g, idx) => {
+    const p = idx + 1;
+    const ev = item.roleEvents?.[idx] || null;
+    let roleLine = "";
+    if (ev?.empath?.peekTarget) roleLine = `Empath: peek P${ev.empath.peekTarget} -> guessed P${ev.empath.peekGuess ?? "-"}`;
+    else if (ev?.illuminator) roleLine = `Illuminator: L P${ev.illuminator.left} (${ev.illuminator.leftCat}), R P${ev.illuminator.right} (${ev.illuminator.rightCat}) => ${ev.illuminator.sameCategory ? "SAME" : "DIFF"}`;
+    else if (ev?.oracle?.target) roleLine = `Oracle: stole 10 from P${ev.oracle.target}`;
+    else if (ev?.corrupter?.target) roleLine = `Corrupter: hit P${ev.corrupter.target} (-${ev.corrupter.dmg})`;
+    else if (ev?.hunter?.strike) roleLine = `Hunter: struck P${ev.hunter.strike} (${ev.hunter.cat})`;
+    else if (ev?.highroller) roleLine = `High Roller: g1 P${ev.highroller.g1} & g2 P${ev.highroller.g2}`;
+
+    return `<div>P${p} (${item.roles[idx]}): guessed P${g ?? "-"} | Δ ${item.deltas[idx] >= 0 ? "+" : ""}${Math.round(item.deltas[idx] * 10) / 10} | total ${Math.round(item.scores[idx] * 10) / 10}<br><span class="text-zinc-400 text-xs">${(roleLine ? roleLine + " • " : "")}${(item.reasons[idx] || "No special trigger.")}</span></div>`;
+  }).join("<hr class='border-zinc-700' />");
+  show($("round-details-modal"));
+}
+
+function hideRoundDetailsModal() {
+  hide($("round-details-modal"));
+}
+
+function startNewSet() {
+  location.reload();
+}
+
+// Modal utils
+function showFullRules() { /* ... */ }
+function hideFullRules() { /* ... */ }
+function resetGame() { if (confirm("Reset everything?")) location.reload(); }
+
+// Initialize game
+window.onload = () => {
+  console.log("%cGame of Guesses – Fixed & Improved", "color:#eab308; font-size:14px; font-family:monospace");
+
+  // Generate player-count buttons (the HTML container is intentionally empty).
+  const countScreen = $("player-count-screen");
+  const grid = countScreen?.querySelector(".grid");
+  if (grid && grid.children.length === 0) {
+    for (let n = 4; n <= 12; n++) {
+      const btn = document.createElement("button");
+      btn.className = "px-10 py-6 bg-gradient-to-br from-zinc-800 to-zinc-900 hover:from-zinc-700 hover:to-zinc-800 rounded-2xl text-3xl font-bold border border-yellow-500/20 shadow-lg transition";
+      btn.textContent = String(n);
+      btn.onclick = () => startSimulation(n);
+      grid.appendChild(btn);
+    }
+  }
+
+  // If URL is already a room (e.g. /4BKZ3J), auto-join and resume.
+  const roomFromUrl = getRoomCodeFromPath() || getRoomCodeFromQuery();
+  const { playerName } = ensureLocalIdentity();
+  if (roomFromUrl) {
+    startOnlineMode();
+    if ($("mp-room-input")) $("mp-room-input").value = roomFromUrl;
+    if ($("mp-name-input") && playerName) $("mp-name-input").value = playerName;
+    if (playerName) {
+      joinRoom();
+    } else {
+      // User needs to enter name; we keep them on the lobby screen.
+      show($("multiplayer-screen"));
+    }
+  }
+};
+</script>
+</body>
+</html>
