@@ -2225,7 +2225,7 @@ function startRoundFromNetwork() {
           })
         : Math.floor(Math.random() * state.numPlayers) + 1;
       state.empathPeekTarget = target;
-      openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+      openEmpathWaitingModal(target);
       return;
     } else if (actionKey === "illuminator") {
       const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
@@ -2510,6 +2510,25 @@ function openRoleActionModal(roleName) {
     `;
     closeRoleModalThenOpenGuess();
   }
+  
+  // Add "Use Role Later" button for once-per-set/game roles
+  const usageText = roleByColor[roleToColor[roleName]]?.usage || "";
+  if (usageText.includes("Once per Set") || usageText.includes("Once per Game")) {
+    setTimeout(() => {
+      const abtn = $("role-apply-btn");
+      if (abtn && abtn.parentElement && !$("role-later-btn")) {
+        const laterBtn = document.createElement("button");
+        laterBtn.id = "role-later-btn";
+        laterBtn.className = "px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold ml-2";
+        laterBtn.textContent = "Use Role Later";
+        laterBtn.onclick = () => {
+          hide(dom.roleModal);
+          openGuessModal();
+        };
+        abtn.parentElement.insertBefore(laterBtn, abtn.nextSibling);
+      }
+    }, 100);
+  }
   // already shown above
 }
 
@@ -2570,6 +2589,68 @@ function showRoleDetailPopup(roleName) {
   if (!roleInfo) return;
   
   alert(`${roleName}\n\nAbility: ${roleInfo.desc}\n\nUsage: ${roleInfo.usage}`);
+}
+
+function openEmpathWaitingModal(target) {
+  dom.roleModalTitle.innerHTML = `
+    <div class="text-2xl md:text-3xl text-center mb-2">THE EMPATH</div>
+    <div class="text-base md:text-lg text-pink-300 text-center">Sense Suspicion</div>
+    <div class="text-xs text-amber-300 text-center mt-1">Every Round</div>
+  `;
+  dom.roleModalDesc.innerHTML = `
+    <button onclick="showRoleDetailPopup('The Empath')" class="px-3 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-xs mb-3">
+      📖 View Detailed Info
+    </button>
+    <div id="empath-wait-status" class="text-sm text-zinc-200 mt-3"></div>
+  `;
+  dom.roleModalResult.textContent = "";
+  dom.roleModalCircle.innerHTML = "";
+  dom.roleModalCircle.classList.add("hidden");
+  
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.add("hidden");
+  
+  const cbtn = $("role-continue-btn");
+  if (cbtn) {
+    cbtn.classList.remove("hidden");
+    cbtn.disabled = true;
+    cbtn.classList.add("opacity-50", "cursor-not-allowed");
+    cbtn.textContent = "Waiting for guess...";
+  }
+  
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.add("hidden");
+  
+  show(dom.roleModal);
+  checkEmpathTargetGuess(target);
+}
+
+function checkEmpathTargetGuess(target) {
+  const waitStatus = $("empath-wait-status");
+  const cbtn = $("role-continue-btn");
+  let targetGuess = null;
+  
+  if (state.onlineMode && state.roundGuesses) {
+    targetGuess = state.roundGuesses[target];
+  } else if (!state.onlineMode && state.plannedGuesses) {
+    targetGuess = state.plannedGuesses[target - 1];
+  }
+  
+  if (targetGuess !== undefined && targetGuess !== null) {
+    if (waitStatus) {
+      waitStatus.innerHTML = `<div class="text-pink-300 font-bold text-lg">✓ P${target} guessed P${targetGuess}</div>`;
+    }
+    if (cbtn) {
+      cbtn.disabled = false;
+      cbtn.classList.remove("opacity-50", "cursor-not-allowed");
+      cbtn.textContent = "Continue to Guess";
+    }
+  } else {
+    if (waitStatus) {
+      waitStatus.innerHTML = `<div class="text-amber-300">⏳ Waiting for P${target} to guess...</div>`;
+    }
+    setTimeout(() => checkEmpathTargetGuess(target), 1000);
+  }
 }
 
 function continueToGuessFromRole() {
@@ -3076,7 +3157,10 @@ function calculateRound() {
         guesses[p] = null;
       } else if (g === undefined) {
         // Single-player fallback: if no planned guess exists, generate one.
-        guesses[p] = Math.floor(Math.random() * state.numPlayers) + 1;
+        const randomGuess = Math.floor(Math.random() * state.numPlayers) + 1;
+        guesses[p] = randomGuess;
+        // Store it back so it shows in summary
+        state.plannedGuesses[p - 1] = randomGuess;
       } else {
         guesses[p] = g;
       }
