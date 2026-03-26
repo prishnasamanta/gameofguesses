@@ -652,6 +652,7 @@ const state = {
   playerOrderSocketIds: [],
   playerOrderPlayerKeys: [],
   firebaseRoomUnsubscribe: null,
+  firebaseRoomCode: "",
   presenceByPlayerKey: {},
   presenceTimer: null,
   currentRoundSgEvents: {},
@@ -1577,7 +1578,8 @@ function syncFirebaseLobbyRoom(payload) {
     seatIndex
   };
   update(ref(window.db), up);
-  listenToFirebaseRoom(code);
+  // Keep one stable listener per room; avoid resubscribing every lobby tick.
+  if (state.firebaseRoomCode !== code) listenToFirebaseRoom(code);
 }
 
 function pushFirebaseMatchState(payload) {
@@ -1642,6 +1644,7 @@ function listenToFirebaseRoom(roomCode) {
     state.firebaseRoomUnsubscribe();
     state.firebaseRoomUnsubscribe = null;
   }
+  state.firebaseRoomCode = roomCode;
   const { ref, onValue } = window.rtdb;
   const roomRef = ref(window.db, "rooms/" + roomCode);
   state.firebaseRoomUnsubscribe = onValue(roomRef, (snapshot) => {
@@ -1651,12 +1654,18 @@ function listenToFirebaseRoom(roomCode) {
 
     // Sync lobby players in real-time (before match starts)
     if (data.players && !data.match?.started) {
-      const playerKeys = Object.keys(data.players);
-      state.roomPlayers = playerKeys.map(key => {
-        const p = data.players[key];
-        return p?.name || "Player";
-      });
-      refreshRoomUi();
+      // Socket lobby_update is source-of-truth for instant joined-player list.
+      // Only use Firebase lobby players as bootstrap/fallback.
+      if (!state.socket || !state.roomPlayers.length) {
+        const ordered = Object.keys(data.players)
+          .map((key) => ({ key, ...(data.players[key] || {}) }))
+          .sort((a, b) => (Number(a.seatIndex) || 999) - (Number(b.seatIndex) || 999));
+        state.roomPlayers = ordered.map((p, i) => {
+          const nm = p && p.name != null ? String(p.name).trim() : "";
+          return nm || `Player ${i + 1}`;
+        });
+        refreshRoomUi();
+      }
     }
 
     // Sync metadata (target players, etc.)
