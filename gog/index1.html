@@ -37,6 +37,8 @@
   --text-muted: #94a3b8;
 }
 
+.hidden { display: none !important; }
+
 body {
   font-family: 'Press Start 2P', system-ui, sans-serif;
   background: var(--bg-dark);
@@ -58,12 +60,36 @@ body {
   width: min(90vw, 480px);
   aspect-ratio: 1 / 1;
   margin: 2rem auto;
-  border: clamp(12px, 4vw, 20px) solid var(--yellow-glow);
+  border: clamp(12px, 4vw, 20px) solid transparent;
   border-radius: 50%;
-  background: radial-gradient(circle at center, #1f2937 20%, #111827 100%);
+  background:
+    radial-gradient(circle at center, rgba(17,24,39,0.95) 24%, rgba(2,6,23,0.96) 100%),
+    linear-gradient(135deg, rgba(14,116,144,0.35), rgba(99,102,241,0.28), rgba(217,70,239,0.24));
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
   box-shadow: 0 0 60px rgba(251, 191, 36, 0.5),
               inset 0 0 50px rgba(251, 191, 36, 0.25);
-  transition: transform 0.4s ease;
+  transition: transform 0.4s ease, filter 0.4s ease;
+  animation: tableGlow 4.2s ease-in-out infinite;
+}
+#circle-table::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(34,211,238,0.55), rgba(250,204,21,0.7), rgba(217,70,239,0.55), rgba(34,211,238,0.55));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 0);
+  animation: spinRing 6s linear infinite;
+  pointer-events: none;
+}
+@keyframes tableGlow {
+  0%, 100% { filter: hue-rotate(0deg) saturate(1); }
+  50% { filter: hue-rotate(18deg) saturate(1.2); }
+}
+@keyframes spinRing {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .player-seat {
@@ -127,9 +153,27 @@ body {
 }
 
 .animated-main {
-  background: linear-gradient(120deg, #020617, #0f172a, #111827, #1e1b4b, #0f172a);
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 800px at 10% 20%, rgba(6,182,212,0.12), transparent 60%),
+    radial-gradient(1200px 800px at 90% 80%, rgba(217,70,239,0.1), transparent 62%),
+    linear-gradient(120deg, #020617, #0b1220, #111827, #1e1b4b, #0f172a);
   background-size: 260% 260%;
   animation: bgDrift 14s ease infinite;
+}
+.animated-main::before {
+  content: "GAME OF GUESSES";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: clamp(28px, 7vw, 110px);
+  letter-spacing: 0.2em;
+  color: rgba(34, 211, 238, 0.045);
+  pointer-events: none;
 }
 
 /* Mobile layout: prevent overflow, safe areas, readable modals */
@@ -138,6 +182,10 @@ body {
   padding-right: env(safe-area-inset-right, 0);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
+.hide-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+*::-webkit-scrollbar { width: 0; height: 0; }
+* { scrollbar-width: none; }
 .modal, #guess-modal > div, #role-modal > div {
   max-height: min(92vh, 920px);
   overflow-y: auto;
@@ -200,6 +248,23 @@ PLAY MULTIPLAYER ONLINE
 <button onclick="showTestRolesScreen()" class="px-10 py-4 bg-gradient-to-br from-purple-600 to-pink-700 hover:from-purple-700 hover:to-pink-800 rounded-3xl text-xl md:text-2xl font-bold shadow-2xl transform hover:scale-105 transition-all duration-300">
 TEST ROLES
 </button>
+<div class="w-full max-w-5xl grid md:grid-cols-2 gap-4 mt-2">
+  <div class="bg-zinc-900/60 border border-cyan-500/30 rounded-2xl p-4">
+    <div class="text-cyan-300 font-bold mb-2">POINT SYSTEM</div>
+    <div class="text-xs text-zinc-200 leading-relaxed space-y-1">
+      <div>Rule 1: nobody guesses holder -> holder gains from all.</div>
+      <div>Rule 2: correct holder guess -> +5.</div>
+      <div>Rule 3: holder catches correct guesser -> bonus/-5 exchange.</div>
+      <div>Rule 4: 2+ correct and failed catch -> extra bonuses.</div>
+    </div>
+  </div>
+  <div class="bg-zinc-900/60 border border-fuchsia-500/30 rounded-2xl p-4">
+    <div class="text-fuchsia-300 font-bold mb-2">ROLE SNAPSHOT</div>
+    <div class="text-xs text-zinc-200 leading-relaxed">
+      Light and Dark roles each round. Use <span class="text-amber-300">Rules</span> in game to see full role cards, flip details, and examples.
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- TEST ROLES SCREEN -->
@@ -213,7 +278,7 @@ TEST ROLES
 <!-- PLAYER COUNT -->
 <div id="player-count-screen" class="hidden min-h-screen flex flex-col items-center justify-center gap-6 p-6">
 <h2 class="text-5xl md:text-6xl font-bold text-yellow-300 tracking-widest">PLAYER COUNT</h2>
-<div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
+<div class="w-full max-w-md bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
   <label class="text-cyan-300 text-xs block mb-2">How many sets?</label>
   <select id="set-count-select" class="bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm">
     <option value="1">1 Set</option>
@@ -222,7 +287,7 @@ TEST ROLES
     <option value="7">7 Sets</option>
   </select>
 </div>
-<div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
+<div class="w-full max-w-md bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
   <label class="text-cyan-300 text-xs block mb-2">How many players?</label>
   <select id="player-count-select" class="bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm">
     <option value="4">4 Players</option>
@@ -236,11 +301,14 @@ TEST ROLES
     <option value="12">12 Players</option>
   </select>
 </div>
-<label class="flex items-center gap-2 text-sm text-zinc-200">
-  <input id="till-result-toggle" type="checkbox" class="accent-cyan-500" />
-  Game till result (ignore fixed set limit)
-</label>
-<div class="text-center">
+<div class="w-full max-w-md bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center">
+  <label class="flex items-center justify-center gap-2 text-sm text-zinc-200">
+    <input id="till-result-toggle" type="checkbox" class="accent-cyan-500" />
+    Game till result (ignore fixed set limit)
+  </label>
+</div>
+<div class="text-center flex items-center gap-3">
+  <button onclick="backToStartFromPlayerConfig()" class="px-8 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 font-bold">Back</button>
   <button id="start-player-config-btn" onclick="startFromPlayerConfig()" class="px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold">Continue</button>
 </div>
 </div>
@@ -248,7 +316,7 @@ TEST ROLES
 <!-- MAIN GAME -->
 <div id="main-game" class="hidden flex flex-col md:flex-row min-h-screen">
 <!-- SIDEBAR -->
-<aside class="w-full md:w-80 bg-black border-b md:border-r border-red-600 p-6 flex flex-col">
+<aside style="display:none !important;" class="w-full md:w-80 bg-black border-b md:border-r border-red-600 p-6 flex flex-col">
 <div class="flex items-center gap-4 mb-10 justify-center md:justify-start">
 <div class="w-14 h-14 bg-gradient-to-br from-red-500 via-yellow-400 to-green-500 rounded-2xl flex items-center justify-center text-4xl shadow-inner">🎲</div>
 <div class="text-center md:text-left">
@@ -288,26 +356,29 @@ TEST ROLES
 
 <!-- GAME AREA -->
 <main class="flex-1 p-6 md:p-10 flex flex-col items-center animated-main">
-<button id="mobile-sidebar-toggle" type="button" class="md:hidden fixed top-4 left-4 z-50 bg-zinc-900/90 border border-cyan-500/30 text-cyan-200 px-3 py-2 rounded-xl text-xs font-bold">
-  ☰
-</button>
-<div class="w-full max-w-5xl flex flex-col items-center gap-3 mb-4">
-<div id="round-info" class="bg-zinc-900 px-4 py-2 rounded-xl border border-yellow-500/40 text-yellow-300 font-bold text-sm md:text-base">
+<div class="w-full flex flex-col items-center gap-3 mb-4">
+<div class="w-full flex items-center justify-between gap-3 rounded-2xl bg-zinc-900/60 border border-cyan-500/20 px-4 py-3">
+  <div class="w-12 h-12 bg-gradient-to-br from-red-500 via-yellow-400 to-green-500 rounded-2xl flex items-center justify-center text-3xl shadow-inner">🎲</div>
+  <div class="text-left">
+    <h1 class="text-lg md:text-2xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-yellow-300 to-green-400">GAME OF GUESSES</h1>
+  </div>
+  <div id="round-info" class="bg-zinc-900 px-4 py-2 rounded-xl border border-yellow-500/40 text-yellow-300 font-bold text-xs md:text-sm">
 SET 1 • ROUND 0 / ?
 </div>
-<div class="flex items-center gap-2">
-  <button onclick="startRound()" id="start-round-btn" class="bg-gradient-to-r from-yellow-400 to-red-500 hover:from-yellow-500 hover:to-red-600 text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition text-sm md:text-base">
+</div>
+<div class="w-full grid grid-cols-1 md:grid-cols-3 gap-2">
+  <button onclick="startRound()" id="start-round-btn" class="h-11 bg-gradient-to-r from-yellow-400 to-red-500 hover:from-yellow-500 hover:to-red-600 text-black px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition text-xs md:text-sm">
   <i class="fa-solid fa-play"></i> Start Round
   </button>
-  <button onclick="showRulesModal()" id="rules-btn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2 rounded-xl font-bold text-xs md:text-sm shadow-lg transition">
-  Rules
-  </button>
-  <button id="chat-icon-btn" class="hidden bg-cyan-700 hover:bg-cyan-800 text-white px-3 py-2 rounded-xl text-xs font-bold">💬</button>
-</div>
-<div id="chat-timer-inline" class="hidden text-cyan-200 text-xs">Chat timer: 04:00</div>
-<button id="my-role-chip" onclick="showMyRoleInfo()" class="bg-zinc-900/90 border border-cyan-500/40 text-cyan-200 px-4 py-2 rounded-xl text-xs md:text-sm">
+<button id="my-role-chip" onclick="showMyRoleInfo()" class="h-11 w-full bg-zinc-900/90 border border-cyan-500/40 text-cyan-200 px-4 py-2 rounded-xl text-xs md:text-sm whitespace-nowrap overflow-hidden text-ellipsis">
   My Role: -
 </button>
+  <button onclick="showRulesModal()" id="rules-btn" class="h-11 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2 rounded-xl font-bold text-xs md:text-sm shadow-lg transition">
+  Rules
+  </button>
+</div>
+<button id="chat-icon-btn" class="hidden bg-cyan-700 hover:bg-cyan-800 text-white px-3 py-2 rounded-xl text-xs font-bold">💬</button>
+<div id="chat-timer-inline" class="hidden text-cyan-200 text-xs">Chat timer: 04:00</div>
 </div>
 <div id="circle-table" class="relative"></div>
 <div id="status-text" class="mt-4 w-full max-w-3xl text-center text-base md:text-lg min-h-[72px]"></div>
@@ -315,26 +386,38 @@ SET 1 • ROUND 0 / ?
 </div>
 
 <!-- MULTIPLAYER LOBBY -->
-<div id="multiplayer-screen" class="hidden min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-  <h2 class="text-4xl md:text-5xl font-bold text-cyan-300">MULTIPLAYER LOBBY</h2>
-  <input id="mp-name-input" placeholder="Enter your name" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
-  <select id="mp-target-players" onchange="updateTargetPlayers()" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md">
-    <option value="4">4 Players</option>
-    <option value="5">5 Players</option>
-    <option value="6">6 Players</option>
-    <option value="7">7 Players</option>
-    <option value="8">8 Players</option>
-    <option value="9">9 Players</option>
-    <option value="10">10 Players</option>
-    <option value="11">11 Players</option>
-    <option value="12">12 Players</option>
-  </select>
-  <div class="flex gap-3">
-    <button onclick="backToStartFromLobby()" class="px-6 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 font-bold">← Back</button>
-    <button onclick="createRoom()" class="px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Create Room</button>
-    <button onclick="joinRoom()" class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 font-bold">Join Room</button>
+<div id="multiplayer-screen" class="hidden min-h-screen flex flex-col items-center justify-center gap-4 p-4 md:p-6">
+  <h2 class="text-3xl md:text-5xl font-bold text-cyan-300 text-center">MULTIPLAYER LOBBY</h2>
+  <div id="mp-tab-bar" class="w-full max-w-md flex rounded-xl bg-zinc-900/70 border border-zinc-700 p-1">
+    <button id="mp-tab-create" onclick="setLobbyTab('create')" class="flex-1 py-2 rounded-lg bg-cyan-700 text-white text-xs font-bold">Create Room</button>
+    <button id="mp-tab-join" onclick="setLobbyTab('join')" class="flex-1 py-2 rounded-lg text-zinc-200 text-xs font-bold">Join Room</button>
   </div>
-  <input id="mp-room-input" placeholder="Room code" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
+  <div id="mp-create-panel" class="w-full max-w-md space-y-3">
+    <input id="mp-name-input" placeholder="Enter your name" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
+    <select id="mp-target-players" onchange="updateTargetPlayers()" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md">
+      <option value="4">4 Players</option>
+      <option value="5">5 Players</option>
+      <option value="6">6 Players</option>
+      <option value="7">7 Players</option>
+      <option value="8">8 Players</option>
+      <option value="9">9 Players</option>
+      <option value="10">10 Players</option>
+      <option value="11">11 Players</option>
+      <option value="12">12 Players</option>
+    </select>
+    <div class="flex gap-3">
+      <button onclick="backToStartFromLobby()" class="px-6 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 font-bold">← Back</button>
+      <button onclick="createRoom()" class="px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Create Room</button>
+    </div>
+  </div>
+  <div id="mp-join-panel" class="hidden w-full max-w-md space-y-3">
+    <input id="mp-name-input-join" placeholder="Enter your name" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
+    <input id="mp-room-input" placeholder="Room code" class="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 w-full max-w-md" />
+    <div class="flex gap-3">
+      <button onclick="backToStartFromLobby()" class="px-6 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 font-bold">← Back</button>
+      <button onclick="joinRoom()" class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 font-bold">Join Room</button>
+    </div>
+  </div>
   <div id="mp-room-link" class="text-xs text-zinc-300"></div>
   <!-- Players list and chat - only shown when in a room -->
   <div id="mp-room-details" class="hidden w-full max-w-md space-y-4">
@@ -366,7 +449,7 @@ SET 1 • ROUND 0 / ?
 <div class="text-center text-xs md:text-sm text-zinc-300">
   <button onclick="noVote()" class="underline decoration-red-400 hover:text-red-300">No vote (-25)</button>
   <span class="mx-2 text-zinc-600">•</span>
-  <button id="skip-guess-btn" onclick="skipGuess()" class="underline decoration-amber-300 hover:text-amber-200 hidden">Skip guess (Double next)</button>
+  <button id="skip-guess-btn" onclick="skipGuess()" class="hidden">Skip guess (Double next)</button>
   <span class="mx-2 text-zinc-600">•</span>
   <button onclick="useSpecialGuessCard()" class="underline decoration-fuchsia-300 hover:text-fuchsia-200">SG Card</button>
 </div>
@@ -380,8 +463,8 @@ SET 1 • ROUND 0 / ?
     <h2 id="role-modal-title" class="text-2xl md:text-3xl text-center mb-2">Role Action</h2>
     <p id="role-modal-desc" class="text-center text-sm md:text-base mb-4 text-zinc-200"></p>
     <div id="role-modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-4"></div>
-    <p id="role-modal-instruction" class="text-center text-xs md:text-sm text-zinc-300 mb-4">Select players on the table.</p>
-    <div class="text-center min-h-[42px]">
+    <p id="role-modal-instruction" class="hidden text-center text-xs md:text-sm text-zinc-300 mb-4">Select players on the table.</p>
+    <div id="role-modal-result-wrap" class="hidden text-center">
       <div id="role-modal-result" class="text-sm md:text-base text-pink-300 font-bold"></div>
     </div>
     <div class="mt-4 text-center">
@@ -447,10 +530,24 @@ SET 1 • ROUND 0 / ?
 <div id="round-details-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
   <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-2xl border border-cyan-400/40 max-h-[90vh] overflow-auto">
     <div class="flex items-center justify-between mb-3">
-      <h2 class="text-2xl font-bold text-cyan-300">Round Details</h2>
+      <div class="flex items-center gap-2">
+        <h2 class="text-2xl font-bold text-cyan-300">Round Details</h2>
+        <button onclick="showPointRulesModal()" title="Point system" class="w-7 h-7 rounded-full bg-cyan-700 hover:bg-cyan-800 text-white text-sm font-black">?</button>
+      </div>
       <button onclick="hideRoundDetailsModal()" class="text-zinc-300 hover:text-white">✕</button>
     </div>
     <div id="round-details-content" class="text-sm text-zinc-200 space-y-2"></div>
+  </div>
+</div>
+
+<!-- POINT RULES MODAL -->
+<div id="point-rules-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-3xl border border-amber-400/40 max-h-[90vh] overflow-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-2xl font-bold text-amber-300">Point System</h2>
+      <button onclick="hidePointRulesModal()" class="text-zinc-300 hover:text-white">✕</button>
+    </div>
+    <div id="point-rules-content" class="text-sm text-zinc-200 space-y-3"></div>
   </div>
 </div>
 
@@ -537,8 +634,10 @@ const state = {
   executionerUsed: false,
   soulSwapperUsed: false,
   alchemistUsed: false,
+  isTestMode: false,
   roomCode: "",
   roomPlayers: [],
+  lobbyTab: "create",
   myName: "",
   playerKey: "",
   socket: null,
@@ -555,6 +654,7 @@ const state = {
   firebaseRoomUnsubscribe: null,
   presenceByPlayerKey: {},
   presenceTimer: null,
+  currentRoundSgEvents: {},
   _guessPhaseRerenderTimer: null,
   _lastSubmittedToastMsg: "",
   // For Phantasm flicker restore
@@ -569,7 +669,7 @@ const colorOrder = ["GREEN", "NEON", "YELLOW", "PINK", "RED", "BLUE", "VIOLET", 
 // Color -> role (from your list)
 const roleByColor = {
   YELLOW: { role: "The Oracle", desc: "Reveal Alignment: choose player Light/Dark; steal -10 from each chosen.", usage: "Every Round" },
-  PINK: { role: "The Empath", desc: "Sense Suspicion: see one target's guess after all submit.", usage: "Every Round" },
+PINK: { role: "The Empath", desc: "Sense Suspicion: select one target and see their guess as soon as they submit.", usage: "Every Round" },
   NEON: { role: "The Illuminator", desc: "Private Hint: know if your neighbors are same category (Yes/No).", usage: "Once per Round" },
   GOLD: { role: "The High Roller", desc: "Double Guess: choose 2 targets; each -10, if correct extra -5. Silver hit: target -100, you +100.", usage: "Once per Set" },
   LIME: { role: "The Reflector", desc: "Passive: if a Dark player guesses you, they get instant -15.", usage: "Passive" },
@@ -870,18 +970,181 @@ function endDiscussionNow(remote = false) {
 
 function showRulesModal() {
   const content = $("rules-content");
+  const light = ["YELLOW", "PINK", "NEON", "GOLD", "LIME", "ORANGE"];
+  const dark = ["GREEN", "BROWN", "VIOLET", "SILVER", "RED", "BLUE"];
+  const iconByColor = {
+    YELLOW: "☀", PINK: "♥", NEON: "✦", GOLD: "♦", LIME: "↺", ORANGE: "⛃",
+    GREEN: "☠", BROWN: "⚑", VIOLET: "⟲", SILVER: "⚗", RED: "✧", BLUE: "⟡"
+  };
+  const toCard = (colorName) => {
+    const roleInfo = roleByColor[colorName] || {};
+    const roleName = roleInfo.role || colorName;
+    const roleHex = colorHex[colorName] || "#334155";
+    const textColor = getContrastingText(roleHex);
+    return `
+      <button type="button" onclick="flipRuleRoleCard(this)" class="w-full text-left rounded-2xl border border-zinc-600 p-3 transition hover:scale-[1.01]" style="background:${roleHex}22">
+        <div class="rule-front">
+          <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center font-black text-base border border-zinc-200/20" style="background:${roleHex}; color:${textColor}">${iconByColor[colorName] || "✦"}</div>
+            <div class="min-w-0">
+              <div class="font-black">${colorName}</div>
+              <div class="text-xs text-zinc-100/90">${roleName}</div>
+              <div class="text-[10px] text-zinc-200/80 mt-1">Tap to flip details</div>
+            </div>
+          </div>
+        </div>
+        <div class="rule-back hidden">
+          <div class="font-black mb-1">${colorName} — ${roleName}</div>
+          <div class="text-xs mb-2">${roleInfo.desc || "No description."}</div>
+          <div class="text-[10px] text-zinc-200/90">Usage: ${roleInfo.usage || "—"}</div>
+        </div>
+      </button>
+    `;
+  };
+
   content.innerHTML = `
-    <div><b>Core round points:</b> correct guess +5; if nobody guesses holder, holder gets +5 from each other; holder-picked player gets -5; catch/fail-catch bonuses applied.</div>
-    <div><b>After each round:</b> full summary shows everyone's guess, delta and total.</div>
-    <div class="mt-2"><b>Light roles:</b> YELLOW Oracle, PINK Empath, NEON Illuminator, GOLD High Roller, LIME Reflector, ORANGE Merchant.</div>
-    <div><b>Dark roles:</b> GREEN Corrupter, BROWN Executioner, VIOLET Soul Swapper, SILVER Alchemist, RED Hunter, BLUE Siphon.</div>
-    <div class="mt-2 text-zinc-400">Detailed role usage has been mapped into gameplay where possible in this simulation.</div>
+    <div class="space-y-3">
+      <div class="rounded-2xl bg-zinc-800/40 border border-cyan-400/20 p-4">
+        <div class="text-cyan-200 font-bold mb-2">✦ Round Flow</div>
+        <div class="text-zinc-200 text-sm leading-relaxed space-y-2">
+          <div><span class="text-amber-300 font-bold">1)</span> A color is announced.</div>
+          <div><span class="text-amber-300 font-bold">2)</span> Holder picks a target; others guess the holder (or No Vote).</div>
+          <div><span class="text-amber-300 font-bold">3)</span> Points apply (guess rules + any role/SG effects).</div>
+          <div><span class="text-amber-300 font-bold">4)</span> History stores every round. Use <span class="text-emerald-300 font-bold">HISTORY</span> after a set to open the full round tables.</div>
+        </div>
+      </div>
+      <div class="rounded-2xl bg-zinc-800/40 border border-sky-400/20 p-4">
+        <div class="text-sky-300 font-bold mb-2">Point Rules (quick)</div>
+        <div class="text-xs text-zinc-200 space-y-1">
+          <div><b>Rule 1:</b> Nobody guesses holder -> holder gains from all.</div>
+          <div><b>Rule 2:</b> At least one correct holder guess -> each correct gets +5.</div>
+          <div><b>Rule 3:</b> Holder catches a correct guesser -> catcher bonus +5, holder -5.</div>
+          <div><b>Rule 4:</b> 2+ correct and holder fails catch -> bonus to correct guessers, holder loses per correct.</div>
+        </div>
+        <button onclick="showPointRulesModal()" class="mt-3 px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-xs font-bold">Open full point rules + examples</button>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="rounded-2xl bg-zinc-800/40 border border-amber-400/20 p-4">
+          <div class="text-amber-300 font-bold mb-3">☀ LIGHT ROLES</div>
+          <div class="space-y-2">
+            ${light.map((c) => toCard(c)).join("")}
+          </div>
+        </div>
+        <div class="rounded-2xl bg-zinc-800/40 border border-violet-400/20 p-4">
+          <div class="text-violet-300 font-bold mb-3">☾ DARK ROLES</div>
+          <div class="space-y-2">
+            ${dark.map((c) => toCard(c)).join("")}
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-zinc-800/40 border border-emerald-400/20 p-4">
+        <div class="text-emerald-200 font-bold mb-2">Download Detailed Rules</div>
+        <div class="text-zinc-300 text-xs mb-2">Includes full point system + all roles + examples in one detailed document.</div>
+        <button onclick="downloadRulesDetailedPdf()" class="px-3 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-xs font-bold">Download Detailed Rules PDF</button>
+      </div>
+    </div>
   `;
   show($("rules-modal"));
 }
 
 function hideRulesModal() {
   hide($("rules-modal"));
+}
+
+function flipRuleRoleCard(btn) {
+  if (!btn) return;
+  const front = btn.querySelector(".rule-front");
+  const back = btn.querySelector(".rule-back");
+  if (!front || !back) return;
+  front.classList.toggle("hidden");
+  back.classList.toggle("hidden");
+}
+
+async function downloadRulesDetailedPdf() {
+  const longText = `
+GAME OF GUESSES — DETAILED RULES
+
+POINT SYSTEM
+Rule 1 (Nobody guesses holder):
+- Holder gains +5 from each other player.
+- Holder-picked player gets -5.
+Example:
+Random-Blue
+1-3(-5)
+2-1(0)
+3-2(0)
+*4-1(+15)
+
+Rule 2 (At least one correct guess):
+- Each correct guesser gets +5.
+Example:
+Random-Yellow
+1-4(0)
+*2-3(0)
+3-4(0)
+4-2(+5)
+
+Rule 3 (Holder catches correct guesser):
+- Caught correct guesser gets +5 bonus.
+- Holder gets -5.
+Example:
+Random-Green
+1-2(0)
+2-3(+5, bonus +5)
+*3-2(-5)
+4-1(0)
+
+Rule 4 (2+ correct and holder fails catch):
+- Each correct guesser gets +5 bonus.
+- Holder loses -5 per correct guesser.
+Example:
+Random-Red
+*1-4(-10)
+2-1(+5, bonus +5)
+3-1(+5, bonus +5)
+4-3(0)
+
+ROLES (LIGHT + DARK)
+${Object.keys(roleByColor).map((c) => {
+    const r = roleByColor[c];
+    return `${c}: ${r.role}\nAbility: ${r.desc}\nUsage: ${r.usage}\n`;
+  }).join("\n")}
+  `.trim();
+
+  try {
+    const mod = await import("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm");
+    const jsPDF = mod.jsPDF || (mod.default && mod.default.jsPDF);
+    if (!jsPDF) throw new Error("jsPDF unavailable");
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const margin = 36;
+    const maxW = 520;
+    let y = margin;
+    doc.setFont("courier", "normal");
+    doc.setFontSize(10);
+    const lines = doc.splitTextToSize(longText, maxW);
+    lines.forEach((line) => {
+      if (y > 800) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.text(line, margin, y);
+      y += 12;
+    });
+    doc.save("game-of-guesses-detailed-rules.pdf");
+  } catch (e) {
+    // Fallback: download detailed text if PDF library can't load.
+    const blob = new Blob([longText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "game-of-guesses-detailed-rules.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function toggleSidebarDetails() {
@@ -910,6 +1173,8 @@ function startOnlineMode() {
   }
   hide($("start-screen"));
   show($("multiplayer-screen"));
+  setLobbyTab("create");
+  refreshRoomUi();
 }
 
 function backToStartFromLobby() {
@@ -917,22 +1182,49 @@ function backToStartFromLobby() {
   show($("start-screen"));
 }
 
+function setLobbyTab(tab) {
+  state.lobbyTab = tab === "join" ? "join" : "create";
+  const createPanel = $("mp-create-panel");
+  const joinPanel = $("mp-join-panel");
+  const createTab = $("mp-tab-create");
+  const joinTab = $("mp-tab-join");
+  if (createPanel) createPanel.classList.toggle("hidden", state.lobbyTab !== "create");
+  if (joinPanel) joinPanel.classList.toggle("hidden", state.lobbyTab !== "join");
+  if (createTab) {
+    createTab.classList.toggle("bg-cyan-700", state.lobbyTab === "create");
+    createTab.classList.toggle("text-white", state.lobbyTab === "create");
+  }
+  if (joinTab) {
+    joinTab.classList.toggle("bg-violet-700", state.lobbyTab === "join");
+    joinTab.classList.toggle("text-white", state.lobbyTab === "join");
+  }
+}
+
 function refreshRoomUi() {
   const inRoom = !!state.roomCode;
   const nameInput = $("mp-name-input");
-  const roomInput = $("mp-room-input");
-  const btnBack = document.querySelector("#multiplayer-screen button[onclick='backToStartFromLobby()']");
-  const btnCreate = document.querySelector("#multiplayer-screen button[onclick='createRoom()']");
-  const btnJoin = document.querySelector("#multiplayer-screen button[onclick='joinRoom()']");
+  const nameInputJoin = $("mp-name-input-join");
   const targetSel = $("mp-target-players");
   const roomDetails = $("mp-room-details");
+  const createPanel = $("mp-create-panel");
+  const joinPanel = $("mp-join-panel");
+  const createTab = $("mp-tab-create");
+  const joinTab = $("mp-tab-join");
+  const tabBar = $("mp-tab-bar");
 
   // Once you are in a room, hide lobby controls and show room details.
-  if (nameInput) nameInput.classList.toggle("hidden", inRoom);
-  if (roomInput) roomInput.classList.toggle("hidden", inRoom);
-  if (btnBack) btnBack.classList.toggle("hidden", inRoom);
-  if (btnCreate) btnCreate.classList.toggle("hidden", inRoom);
-  if (btnJoin) btnJoin.classList.toggle("hidden", inRoom);
+  if (nameInput && nameInputJoin && !nameInput.value && nameInputJoin.value) {
+    nameInput.value = nameInputJoin.value;
+  }
+  if (nameInputJoin && nameInput && !nameInputJoin.value && nameInput.value) {
+    nameInputJoin.value = nameInput.value;
+  }
+  if (createPanel) createPanel.classList.toggle("hidden", inRoom || state.lobbyTab !== "create");
+  if (joinPanel) joinPanel.classList.toggle("hidden", inRoom || state.lobbyTab !== "join");
+  if (createTab) createTab.classList.toggle("hidden", inRoom);
+  if (joinTab) joinTab.classList.toggle("hidden", inRoom);
+  if (tabBar) tabBar.classList.toggle("hidden", inRoom);
+  if (!inRoom) setLobbyTab(state.lobbyTab || "create");
   if (targetSel) targetSel.disabled = inRoom && !state.isHost;
   
   // Show room details only when in a room
@@ -986,7 +1278,7 @@ function createRoom() {
 
 function joinRoom() {
   ensureSocket();
-  const name = ($("mp-name-input").value || "").trim();
+  const name = (($("mp-name-input-join")?.value || $("mp-name-input")?.value) || "").trim();
   const code = ($("mp-room-input").value || "").trim().toUpperCase();
   if (!name) {
     alert("Please enter your name");
@@ -1510,17 +1802,8 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
         state.activeAbilityRole = myRole;
         const actionKey = roleActionByRoleName[myRole];
         if (actionKey === "empath") {
-          const target = (state.onlineMode && window.OnlinePointCalculator)
-            ? window.OnlinePointCalculator.getEmpathPeekTarget({
-                roomCode: state.roomCode,
-                set: setNum,
-                round: roundNum,
-                seatIndex: state.myId,
-                numPlayers: state.numPlayers
-              })
-            : Math.floor(Math.random() * state.numPlayers) + 1;
-          state.empathPeekTarget = target;
-          openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+          state.empathPeekTarget = null;
+          openEmpathWaitingModal();
           state.lastRoundPhaseKey = phaseKey;
           return;
         }
@@ -1530,10 +1813,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
           const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
           const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
           const same = leftCat === rightCat;
-          openInformationRoleModal(
-            "The Illuminator",
-            `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`
-          );
+          openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p>`);
           state.lastRoundPhaseKey = phaseKey;
           return;
         }
@@ -1735,7 +2015,11 @@ function renderCircle() {
     const roleName = state.assignedRoles[i] || "Player";
     const roleHex = roleColorMap[roleName] || "#555";
 
-    if (seatId === state.myId) {
+    if (state.gameOver) {
+      seat.style.background = roleHex;
+      seat.style.color = getContrastingText(roleHex);
+      seat.style.border = "2px solid rgba(250,204,21,0.6)";
+    } else if (seatId === state.myId) {
       seat.classList.add("my-seat");
       seat.style.background = roleHex;
       seat.style.color = getContrastingText(roleHex);
@@ -1849,7 +2133,8 @@ function testRoleAction(colorName) {
   startSimulation(4, {
     myId: 1,
     assignedRoles: testRoles,
-    playerNames: ["You (Test)", "Player 2", "Player 3", "Player 4"]
+    playerNames: ["You (Test)", "Player 2", "Player 3", "Player 4"],
+    isTestMode: true
   });
   
   // Immediately trigger the role if it has an action
@@ -1876,7 +2161,7 @@ function testRoleAction(colorName) {
       
       // Trigger role action
       state.activeAbilityRole = role;
-      if (actionKey !== "empath" && actionKey !== "illuminator") {
+      if (actionKey !== "illuminator") {
         openRoleActionModal(role);
       } else {
         // Info roles - just show info
@@ -1889,6 +2174,11 @@ function testRoleAction(colorName) {
 function startFromPlayerConfig() {
   const n = parseInt($("player-count-select")?.value || "4", 10);
   startSimulation(n);
+}
+
+function backToStartFromPlayerConfig() {
+  hide($("player-count-screen"));
+  show($("start-screen"));
 }
 
 function startSimulation(n, config = null) {
@@ -1923,8 +2213,20 @@ function startSimulation(n, config = null) {
   if (config?.assignedRoles && config.assignedRoles.length === n) {
     state.assignedRoles = [...config.assignedRoles];
   } else {
-    // Assign one role per announced color (so each round has a real holder).
-    const colorsForSet = colorOrder.slice(0, n);
+    // Build as balanced Light/Dark as possible (exactly equal for even n).
+    const lightColors = colorOrder.filter((c) => colorCategory[c] === "LIGHT");
+    const darkColors = colorOrder.filter((c) => colorCategory[c] === "DARK");
+    const lightCount = Math.floor(n / 2);
+    const darkCount = n - lightCount;
+    const pick = (arr, count) => {
+      const pool = [...arr];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      return pool.slice(0, count);
+    };
+    const colorsForSet = [...pick(lightColors, lightCount), ...pick(darkColors, darkCount)];
     const rolesToAssign = colorsForSet.map((c) => roleByColor[c].role);
     // Shuffle roles across seats
     for (let i = rolesToAssign.length - 1; i > 0; i--) {
@@ -1942,6 +2244,8 @@ function startSimulation(n, config = null) {
   state.soulSwapperUsed = false;
   state.alchemistUsed = false;
   state.siphonUsed = false;
+  state.isTestMode = !!config?.isTestMode;
+  state.currentRoundSgEvents = {};
   state.playerNames = Array.from({ length: n }, (_, i) => `Player ${i + 1}`);
   if (config?.playerNames && config.playerNames.length === n) {
     state.playerNames = [...config.playerNames];
@@ -2031,6 +2335,7 @@ function startRound() {
   state.roundInProgress = true;
   state.playerGuess = null;
   state.protectedId = null;
+  state.currentRoundSgEvents = {};
 
   state.currentRound++;
   updateRoundInfo();
@@ -2047,6 +2352,14 @@ function startRound() {
   // Generate other players' planned guesses for Sensei / Guardian / Analyst.
   // In online mode, guesses come from Firebase (host resolves once everyone submitted).
   state.plannedGuesses = new Array(state.numPlayers).fill(null);
+  // Offline AI: ensure every non-human seat always submits a valid guess (no "P-").
+  // (No-vote is only used when explicitly chosen by a player.)
+  if (!state.onlineMode) {
+    for (let seat = 1; seat <= state.numPlayers; seat++) {
+      if (seat === state.myId) continue;
+      state.plannedGuesses[seat - 1] = Math.floor(Math.random() * state.numPlayers) + 1;
+    }
+  }
 
   // High visibility pulse for holder seat
   const myRole = state.assignedRoles[state.myId - 1];
@@ -2117,17 +2430,8 @@ function startRound() {
       return;
     }
     if (actionKey === "empath") {
-      const target = (state.onlineMode && window.OnlinePointCalculator)
-        ? window.OnlinePointCalculator.getEmpathPeekTarget({
-            roomCode: state.roomCode,
-            set: state.currentSet,
-            round: state.currentRound,
-            seatIndex: state.myId,
-            numPlayers: state.numPlayers
-          })
-        : Math.floor(Math.random() * state.numPlayers) + 1;
-      state.empathPeekTarget = target;
-      openInformationRoleModal("The Empath", `<p class="text-pink-300 font-bold">After everyone submits, you will see <b>P${target}</b>&apos;s guess.</p>`);
+      state.empathPeekTarget = null;
+      openEmpathWaitingModal();
       return;
     } else if (actionKey === "illuminator") {
       const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
@@ -2135,7 +2439,7 @@ function startRound() {
       const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
       const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
       const same = leftCat === rightCat;
-      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`);
+      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p>`);
       return;
     } else if (actionKey === "siphon") {
       const darkPlayers = [];
@@ -2186,6 +2490,7 @@ function startRoundFromNetwork() {
   state.roundInProgress = true;
   state.playerGuess = null;
   state.protectedId = null;
+  state.currentRoundSgEvents = {};
   state.currentRound++;
   updateRoundInfo();
   state.announcedColor = colorOrder[state.currentRound - 1] || "GREEN";
@@ -2215,17 +2520,8 @@ function startRoundFromNetwork() {
       return;
     }
     if (actionKey === "empath") {
-      const target = (state.onlineMode && window.OnlinePointCalculator)
-        ? window.OnlinePointCalculator.getEmpathPeekTarget({
-            roomCode: state.roomCode,
-            set: state.currentSet,
-            round: state.currentRound,
-            seatIndex: state.myId,
-            numPlayers: state.numPlayers
-          })
-        : Math.floor(Math.random() * state.numPlayers) + 1;
-      state.empathPeekTarget = target;
-      openEmpathWaitingModal(target);
+      state.empathPeekTarget = null;
+      openEmpathWaitingModal();
       return;
     } else if (actionKey === "illuminator") {
       const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
@@ -2233,7 +2529,7 @@ function startRoundFromNetwork() {
       const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
       const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
       const same = leftCat === rightCat;
-      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p><p class="text-zinc-400 text-xs mt-2">Left P${left} (${leftCat}), Right P${right} (${rightCat})</p>`);
+      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p>`);
       return;
     }
   }
@@ -2293,6 +2589,8 @@ function openInformationRoleModal(roleName, infoHtml) {
   dom.roleModalTitle.textContent = roleName;
   dom.roleModalDesc.innerHTML = (roleObj?.desc ? `<p class="mb-3 text-zinc-200 text-sm">${escapeHtml(roleObj.desc)}</p>` : "") + infoHtml;
   dom.roleModalResult.textContent = "";
+  const rwrap = $("role-modal-result-wrap");
+  if (rwrap) rwrap.classList.remove("hidden");
   dom.roleModalCircle.innerHTML = "";
   dom.roleModalCircle.classList.add("hidden");
   const instr = $("role-modal-instruction");
@@ -2336,7 +2634,12 @@ function openRoleActionModal(roleName) {
       📖 View Detailed Info
     </button>
   `;
+  if (roleName === "The High Roller") {
+    dom.roleModalDesc.innerHTML += `<p class="text-xs text-amber-300 mt-2">Current announced color: ${state.announcedColor || "-"}</p>`;
+  }
   dom.roleModalResult.textContent = "";
+  const rwrap = $("role-modal-result-wrap");
+  if (rwrap) rwrap.classList.add("hidden");
   dom.roleModalCircle.innerHTML = "";
   dom.roleModalCircle.classList.remove("hidden");
   const instr = $("role-modal-instruction");
@@ -2392,17 +2695,17 @@ function openRoleActionModal(roleName) {
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(2, true)));
   } else if (actionKey === "siphon") {
     const darkPlayers = [];
+    const allPlayers = [];
     for (let p = 1; p <= state.numPlayers; p++) {
-      if (getPlayerCategory(p) === "DARK") darkPlayers.push(`P${p}:${Math.round((state.playerScores[p - 1] || 0) * 10) / 10}`);
+      const cat = getPlayerCategory(p);
+      allPlayers.push(`P${p}:${Math.round((state.playerScores[p - 1] || 0) * 10) / 10} (${cat})`);
+      if (cat === "DARK") darkPlayers.push(`P${p}:${Math.round((state.playerScores[p - 1] || 0) * 10) / 10}`);
     }
-    dom.roleModalResult.textContent = `Dark scores: ${darkPlayers.join(" | ") || "none"}`;
-    state.siphonArmed = false;
+    dom.roleModalDesc.innerHTML += `<p class="text-blue-300 text-xs mt-2">Dark player scores: ${darkPlayers.join(" | ") || "none"}</p>`;
+    dom.roleModalResult.textContent = "";
+    state.siphonArmed = true;
     state.roleRequiredCount = 1;
     state.rolePendingApply = (sel) => {
-      if (!state.siphonArmed) {
-        dom.roleModalResult.textContent = `Press Trigger Role first.`;
-        return;
-      }
       const t = sel[0];
       if (getPlayerCategory(t) !== "DARK") {
         dom.roleModalResult.textContent = `P${t} is not DARK. Choose DARK player.`;
@@ -2420,7 +2723,7 @@ function openRoleActionModal(roleName) {
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
     const tbtn = $("role-trigger-btn");
-    if (tbtn) tbtn.classList.remove("hidden");
+    if (tbtn) tbtn.classList.add("hidden");
   } else if (actionKey === "highroller") {
     if (state.highRollerUsed) {
       dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">High Roller already used this set.</p>`;
@@ -2432,6 +2735,7 @@ function openRoleActionModal(roleName) {
       const [g1, g2] = sel;
       state.highRollerGuesses = [g1, g2];
       state.highRollerUsed = true;
+      state.playerGuess = g1;
       state.playerScores[g1 - 1] -= 10;
       state.playerScores[g2 - 1] -= 10;
       dom.roleModalResult.textContent = `Double guess selected: P${g1} and P${g2}. Each gets -10. If correct, extra -5.`;
@@ -2512,8 +2816,8 @@ function openRoleActionModal(roleName) {
   }
   
   // Add "Use Role Later" button for once-per-set/game roles
-  const usageText = roleByColor[roleToColor[roleName]]?.usage || "";
-  if (usageText.includes("Once per Set") || usageText.includes("Once per Game")) {
+  const usageRuleText = roleByColor[roleToColor[roleName]]?.usage || "";
+  if (usageRuleText.includes("Once per Set") || usageRuleText.includes("Once per Game")) {
     setTimeout(() => {
       const abtn = $("role-apply-btn");
       if (abtn && abtn.parentElement && !$("role-later-btn")) {
@@ -2539,6 +2843,11 @@ function closeRoleModalThenOpenGuess() {
   if (abtn) abtn.classList.add("hidden");
   const tbtn = $("role-trigger-btn");
   if (tbtn) tbtn.classList.add("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.add("hidden");
+  dom.roleModalCircle.classList.add("hidden");
+  const rwrap = $("role-modal-result-wrap");
+  if (rwrap) rwrap.classList.add("hidden");
   syncMyScore();
 }
 
@@ -2591,7 +2900,8 @@ function showRoleDetailPopup(roleName) {
   alert(`${roleName}\n\nAbility: ${roleInfo.desc}\n\nUsage: ${roleInfo.usage}`);
 }
 
-function openEmpathWaitingModal(target) {
+function openEmpathWaitingModal() {
+  state.empathPeekTarget = null;
   dom.roleModalTitle.innerHTML = `
     <div class="text-2xl md:text-3xl text-center mb-2">THE EMPATH</div>
     <div class="text-base md:text-lg text-pink-300 text-center">Sense Suspicion</div>
@@ -2601,31 +2911,47 @@ function openEmpathWaitingModal(target) {
     <button onclick="showRoleDetailPopup('The Empath')" class="px-3 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-xs mb-3">
       📖 View Detailed Info
     </button>
+    <p class="mb-3 text-zinc-200 text-sm">Pick one player on the table, press Apply Role, then wait until that player submits.</p>
     <div id="empath-wait-status" class="text-sm text-zinc-200 mt-3"></div>
   `;
   dom.roleModalResult.textContent = "";
-  dom.roleModalCircle.innerHTML = "";
-  dom.roleModalCircle.classList.add("hidden");
+  const rwrap = $("role-modal-result-wrap");
+  if (rwrap) rwrap.classList.add("hidden");
+  dom.roleModalCircle.classList.remove("hidden");
   
   const instr = $("role-modal-instruction");
-  if (instr) instr.classList.add("hidden");
+  if (instr) {
+    instr.classList.remove("hidden");
+    instr.textContent = "Select 1 player and click Apply Role.";
+  }
   
   const cbtn = $("role-continue-btn");
   if (cbtn) {
     cbtn.classList.remove("hidden");
     cbtn.disabled = true;
     cbtn.classList.add("opacity-50", "cursor-not-allowed");
-    cbtn.textContent = "Waiting for guess...";
+    cbtn.textContent = "Waiting for target guess...";
   }
   
   const abtn = $("role-apply-btn");
-  if (abtn) abtn.classList.add("hidden");
+  if (abtn) abtn.classList.remove("hidden");
+  state.roleRequiredCount = 1;
+  state.roleSelection = [];
+  state.rolePendingApply = (sel) => {
+    const p = sel[0];
+    state.empathPeekTarget = p;
+    if (abtn) abtn.classList.add("hidden");
+    const waitStatus = $("empath-wait-status");
+    if (waitStatus) waitStatus.innerHTML = `<div class="text-amber-300">⏳ Waiting for P${p} to submit guess...</div>`;
+    checkEmpathTargetGuess(p);
+  };
   
   show(dom.roleModal);
-  checkEmpathTargetGuess(target);
+  requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
 }
 
 function checkEmpathTargetGuess(target) {
+  if (!state.empathPeekTarget || target !== state.empathPeekTarget) return;
   const waitStatus = $("empath-wait-status");
   const cbtn = $("role-continue-btn");
   let targetGuess = null;
@@ -2649,11 +2975,15 @@ function checkEmpathTargetGuess(target) {
     if (waitStatus) {
       waitStatus.innerHTML = `<div class="text-amber-300">⏳ Waiting for P${target} to guess...</div>`;
     }
-    setTimeout(() => checkEmpathTargetGuess(target), 1000);
+    setTimeout(() => checkEmpathTargetGuess(target), 500);
   }
 }
 
 function continueToGuessFromRole() {
+  const myRole = state.assignedRoles[state.myId - 1];
+  if (myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2) {
+    state.playerGuess = state.highRollerGuesses[0];
+  }
   const btn = $("role-continue-btn");
   if (btn) btn.classList.add("hidden");
   dom.roleModalCircle.classList.remove("hidden");
@@ -2746,6 +3076,8 @@ function applyRoleSelection() {
     dom.roleModalResult.textContent = `Select exactly ${state.roleRequiredCount} player(s).`;
     return;
   }
+  const laterBtn = $("role-later-btn");
+  if (laterBtn) laterBtn.remove();
   state.rolePendingApply([...sel]);
 }
 
@@ -2823,12 +3155,7 @@ function openGuessModal() {
   // High Roller can skip guess button not used here; keep hidden by default.
   const myRole = state.assignedRoles[state.myId - 1];
   const skipBtn = $("skip-guess-btn");
-  if (myRole === "The High Roller" && !state.highRollerUsed) {
-    skipBtn.classList.remove("hidden");
-    skipBtn.textContent = "High Roller: Use 2 guesses";
-  } else {
-    skipBtn.classList.add("hidden");
-  }
+  if (skipBtn) skipBtn.classList.add("hidden");
 
   const instr = $("guess-instruction");
   if (instr) instr.textContent = "Click a seat to select guess, then press Submit Guess.";
@@ -3049,6 +3376,13 @@ function sgChooseRedemption() {
   }
   state.playerScores[state.myId - 1] += 20;
   state.sgUsed = true;
+  state.currentRoundSgEvents[state.myId] = {
+    type: "redemption",
+    delta: 20,
+    target: state.myId,
+    claim: "self",
+    ts: Date.now()
+  };
   clampEliminations();
   syncMyScore();
   hideSgModal();
@@ -3135,6 +3469,15 @@ function submitSgDuel() {
   state.playerScores[state.myId - 1] += myDelta;
   state.playerScores[target - 1] += targetDelta;
   state.sgUsed = true;
+  state.currentRoundSgEvents[state.myId] = {
+    type: "duel",
+    target,
+    guess,
+    actual,
+    result: ok ? "win" : "lose",
+    delta: myDelta,
+    ts: Date.now()
+  };
   clampEliminations();
   syncMyScore();
   hideSgModal();
@@ -3289,9 +3632,21 @@ function calculateRound() {
       if (myEv?.peekTarget) state.empathPeekTarget = myEv.peekTarget;
     }
   } else {
+    const offlineRoleEvents = new Array(state.numPlayers).fill(null).map((_, i) => ({
+      playerSeat: i + 1,
+      role: state.assignedRoles[i] || null,
+      empath: null,
+      illuminator: null,
+      oracle: null,
+      corrupter: null,
+      hunter: null,
+      highroller: null,
+      siphon: null
+    }));
     // Offline: High Roller second guess effects for user only.
     if (myRole === "The High Roller" && state.highRollerGuesses.length === 2) {
       const [g1, g2] = state.highRollerGuesses;
+      offlineRoleEvents[state.myId - 1].highroller = { g1, g2, silverJackpot: false };
       [g1, g2].forEach((g) => {
         if (g && g !== state.myId) {
           deltas[g - 1] -= 10;
@@ -3307,6 +3662,7 @@ function calculateRound() {
         deltas[state.myId - 1] += 100;
         reasons[state.myId - 1] += "Silver jackpot +100. ";
         reasons[holderId - 1] += "Silver jackpot -100. ";
+        offlineRoleEvents[state.myId - 1].highroller.silverJackpot = true;
       }
     }
 
@@ -3320,6 +3676,7 @@ function calculateRound() {
           deltas[t - 1] -= 10;
           deltas[p - 1] += 10;
           reasons[p - 1] += `Oracle stole 10 from P${t}. `;
+          offlineRoleEvents[p - 1].oracle = { target: t, stolen: 10 };
         }
       } else if (role === "The Corrupter") {
         const t = Math.floor(Math.random() * state.numPlayers) + 1;
@@ -3327,6 +3684,7 @@ function calculateRound() {
         const dmg = t === p ? 15 : (cat === "LIGHT" ? 10 : 5);
         deltas[t - 1] -= dmg;
         reasons[p - 1] += `Corrupter hit P${t} (-${dmg}). `;
+        offlineRoleEvents[p - 1].corrupter = { target: t, cat, dmg };
       } else if (role === "The Hunter") {
         const a = Math.floor(Math.random() * state.numPlayers) + 1;
         const b = Math.floor(Math.random() * state.numPlayers) + 1;
@@ -3335,9 +3693,13 @@ function calculateRound() {
         if (cat === "LIGHT") {
           deltas[strike - 1] -= 30;
           reasons[p - 1] += `Hunter struck P${strike} (-30). `;
+          offlineRoleEvents[p - 1].hunter = { a, b, strike, cat, dmg: 30 };
+        } else {
+          offlineRoleEvents[p - 1].hunter = { a, b, strike, cat, dmg: 0 };
         }
       }
     }
+    onlineRoleEvents = offlineRoleEvents;
   }
 
   // No-vote players (guesses[p] === null) only take the -25 penalty.
@@ -3362,30 +3724,38 @@ function calculateRound() {
   state.prevAnnouncedColor = state.announcedColor;
 
   let summaryHtml = "";
+  const cols = Math.ceil(state.numPlayers / 2);
+  const sizeCls = state.numPlayers <= 6 ? "text-xl md:text-2xl" : state.numPlayers <= 9 ? "text-lg md:text-xl" : "text-base md:text-lg";
   for (let p = 1; p <= state.numPlayers; p++) {
-    summaryHtml += `<div class="text-xs md:text-sm">P${p}: guessed P${guesses[p] ?? "-"} | Δ ${deltas[p - 1] >= 0 ? "+" : ""}${Math.round(deltas[p - 1] * 10) / 10} | total ${Math.round(state.playerScores[p - 1] * 10) / 10}</div>`;
+    const totalNow = Math.round(state.playerScores[p - 1] * 10) / 10;
+    summaryHtml += `
+      <div class="px-3 py-3 rounded-xl border border-cyan-500/20 bg-zinc-800/70 text-center">
+        <div class="${sizeCls} font-black ${totalNow >= 0 ? "text-emerald-300" : "text-rose-300"}">${totalNow}</div>
+      </div>
+    `;
   }
-  const empathExtra = (state.activeAbilityRole === "The Empath" && state.empathPeekTarget)
-    ? `<div class="mt-2 text-pink-300 text-xs">Empath reveal: P${state.empathPeekTarget} guessed P${guesses[state.empathPeekTarget]}.</div>`
-    : "";
+  const empathExtra = "";
   
   // For computer play (offline): show full table with guesses and scores
   // For multiplayer (online): show only scores in modal
   if (!state.onlineMode) {
     // Computer play: show full details as table
     dom.status.innerHTML = `
-      <div class="text-lg font-bold text-amber-300 mb-2">Round ${state.currentRound} summary</div>
-      <div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 mt-3 max-w-2xl mx-auto">
+      <div class="text-lg font-bold text-amber-300 mb-2">Round ${state.currentRound} totals</div>
+      <div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 mt-3 max-w-2xl mx-auto grid gap-2" style="grid-template-columns:repeat(${cols},minmax(0,1fr));">
         ${summaryHtml}
       </div>
       ${empathExtra}
-      <div class="mt-2"><button onclick="showRoundDetailsModal(${state.currentRound - 1})" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button></div>
+      <div class="mt-2 flex items-center justify-center gap-2">
+        <button onclick="showRoundDetailsModal(${state.currentRound - 1})" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button>
+        ${state.isTestMode ? `<button onclick="goHome()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-800 rounded-xl text-xs font-bold">Go Home</button>` : ""}
+      </div>
       <div class="mt-2 text-zinc-300 text-xs">Discussion: ${generateDiscussionLine(guesses)}</div>
     `;
   } else {
     // Multiplayer: show only scores in modal
     dom.status.innerHTML = `
-      <div class="text-lg font-bold text-amber-300 mb-2">Round ${state.currentRound} summary</div>
+      <div class="text-lg font-bold text-amber-300 mb-2">Round ${state.currentRound} totals</div>
       <div class="mt-2"><button onclick="showRoundScoresModal()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm font-bold">View Scores</button></div>
       <div class="mt-2"><button onclick="showRoundDetailsModal(${state.currentRound - 1})" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button></div>
       ${empathExtra}
@@ -3403,7 +3773,8 @@ function calculateRound() {
     reasons: [...reasons],
     roles: [...state.assignedRoles],
     scores: [...state.playerScores],
-    roleEvents: onlineRoleEvents
+    roleEvents: onlineRoleEvents,
+    sgEvents: { ...(state.currentRoundSgEvents || {}) }
   });
 
   state.roundInProgress = false;
@@ -3478,15 +3849,22 @@ function showFinalBoard(reason = "") {
   }
 
   let html = "";
+  const maxScore = Math.max(...state.playerScores);
+  const winnerIdx = state.playerScores.findIndex((x) => x === maxScore);
   for (let i = 1; i <= state.numPlayers; i++) {
     const role = state.assignedRoles[i - 1];
+    const pname = String(state.playerNames?.[i - 1] || `Player ${i}`);
     const score = Array.isArray(state.playerScores) ? (state.playerScores[i - 1] ?? 0) : (i === state.myId ? state.myScore : 0);
     html += `
       <div class="flex items-center gap-6 bg-zinc-800/90 rounded-3xl p-6 border ${i===state.myId?'border-yellow-400':''}">
         <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black" style="background:${roleColorMap[role]}; color:${getContrastingText(roleColorMap[role])}">
           P${i}
         </div>
-        <div class="flex-1"><div class="text-2xl">${role}</div></div>
+        <div class="flex-1">
+          <div class="text-2xl">${pname}</div>
+          <div class="text-xs text-zinc-400">${role}</div>
+        </div>
+        ${i - 1 === winnerIdx ? `<div class="px-3 py-1 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-xs font-bold">WINNER</div>` : ""}
         <div class="text-4xl font-black text-emerald-400">${score}</div>
       </div>`;
   }
@@ -3497,9 +3875,10 @@ function showFinalBoard(reason = "") {
     <div class="mt-12 flex flex-col sm:flex-row flex-wrap justify-center items-stretch gap-4 max-w-3xl mx-auto px-2">
       <button onclick="startNewSet()" class="px-8 sm:px-12 py-5 sm:py-6 bg-emerald-600 hover:bg-emerald-700 rounded-3xl text-lg sm:text-xl font-bold shadow-xl transition">NEW SET</button>
       <button onclick="showHistoryModal()" class="px-8 sm:px-12 py-5 sm:py-6 bg-cyan-700 hover:bg-cyan-800 rounded-3xl text-lg sm:text-xl font-bold transition">HISTORY</button>
-      <button onclick="location.reload()" class="px-8 sm:px-12 py-5 sm:py-6 bg-zinc-700 hover:bg-zinc-800 rounded-3xl text-lg sm:text-xl font-bold transition">END GAME</button>
+      <button onclick="${reason === "Game ended manually." ? "goHome()" : "forceEndGame()"}" class="px-8 sm:px-12 py-5 sm:py-6 bg-zinc-700 hover:bg-zinc-800 rounded-3xl text-lg sm:text-xl font-bold transition">${reason === "Game ended manually." ? "GO HOME" : "END GAME"}</button>
     </div>
   `;
+  renderCircle();
 }
 
 function showHistoryModal() {
@@ -3508,14 +3887,41 @@ function showHistoryModal() {
   if (!state.roundHistory.length) {
     box.innerHTML = `<div>No rounds logged yet.</div>`;
   } else {
-    box.innerHTML = state.roundHistory.map((r) => {
-      const lines = r.guesses.map((g, idx) => {
-        const p = idx + 1;
-        const reason = (r.reasons[idx] || "").trim() || "No special trigger.";
-        const sc = Array.isArray(r.scores) ? r.scores[idx] : 0;
-        return `<div class="text-xs">P${p} (${r.roles[idx]}): guessed P${g ?? "-"} | Δ ${r.deltas[idx] >= 0 ? "+" : ""}${Math.round(r.deltas[idx]*10)/10} | total ${Math.round(sc*10)/10} | ${reason}</div>`;
+    // Group: Set -> list of rounds. UI: "Set history — Round 1, Round 2..."
+    const bySet = new Map();
+    state.roundHistory.forEach((r, idx) => {
+      const setNo = Number(r.set || 1);
+      if (!bySet.has(setNo)) bySet.set(setNo, []);
+      bySet.get(setNo).push({ ...r, _idx: idx });
+    });
+    const setNos = [...bySet.keys()].sort((a, b) => a - b);
+
+    box.innerHTML = setNos.map((setNo) => {
+      const rounds = (bySet.get(setNo) || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
+      const roundBtns = rounds.map((r) => {
+        return `
+          <button type="button"
+            onclick="showRoundDetailsModal(${r._idx})"
+            class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-emerald-500/20 text-emerald-200 text-xs font-bold">
+            Round ${r.round ?? "?"}
+          </button>
+        `;
       }).join("");
-      return `<div class="bg-zinc-800/70 rounded-xl p-3 border border-zinc-700"><div class="font-bold text-amber-300 mb-2">Set ${r.set ?? "?"} • Round ${r.round} • Color ${r.announcedColor} • Holder P${r.holderId}</div>${lines}</div>`;
+
+      return `
+        <div class="bg-zinc-800/70 rounded-2xl p-4 border border-zinc-700">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div class="font-bold text-emerald-300 text-lg">Set History</div>
+              <div class="text-zinc-300 text-[10px]">Set ${setNo} • ${rounds.length} round(s)</div>
+            </div>
+            <div class="text-[10px] text-zinc-400 leading-tight text-right">
+              Click a round to open the full table.
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">${roundBtns}</div>
+        </div>
+      `;
     }).join("");
   }
   show($("history-modal"));
@@ -3550,20 +3956,254 @@ function showRoundDetailsModal(roundIndex) {
   const item = state.roundHistory[roundIndex];
   if (!item) return;
   const box = $("round-details-content");
-  box.innerHTML = item.guesses.map((g, idx) => {
-    const p = idx + 1;
-    const ev = item.roleEvents?.[idx] || null;
-    let roleLine = "";
-    if (ev?.empath?.peekTarget) roleLine = `Empath: peek P${ev.empath.peekTarget} -> guessed P${ev.empath.peekGuess ?? "-"}`;
-    else if (ev?.illuminator) roleLine = `Illuminator: L P${ev.illuminator.left} (${ev.illuminator.leftCat}), R P${ev.illuminator.right} (${ev.illuminator.rightCat}) => ${ev.illuminator.sameCategory ? "SAME" : "DIFF"}`;
-    else if (ev?.oracle?.target) roleLine = `Oracle: stole 10 from P${ev.oracle.target}`;
-    else if (ev?.corrupter?.target) roleLine = `Corrupter: hit P${ev.corrupter.target} (-${ev.corrupter.dmg})`;
-    else if (ev?.hunter?.strike) roleLine = `Hunter: struck P${ev.hunter.strike} (${ev.hunter.cat})`;
-    else if (ev?.highroller) roleLine = `High Roller: g1 P${ev.highroller.g1} & g2 P${ev.highroller.g2}`;
+  const holderName = String((item.playerNames?.[item.holderId - 1] || `P${item.holderId}`)).trim() || `P${item.holderId}`;
+  const announced = item.announcedColor || "—";
+  const titleEl = document.querySelector("#round-details-modal h2");
+  if (titleEl) titleEl.textContent = `Round Table`;
 
-    return `<div>P${p} (${item.roles[idx]}): guessed P${g ?? "-"} | Δ ${item.deltas[idx] >= 0 ? "+" : ""}${Math.round(item.deltas[idx] * 10) / 10} | total ${Math.round(item.scores[idx] * 10) / 10}<br><span class="text-zinc-400 text-xs">${(roleLine ? roleLine + " • " : "")}${(item.reasons[idx] || "No special trigger.")}</span></div>`;
-  }).join("<hr class='border-zinc-700' />");
+  // SG: fetch online SG events (redemption) and re-render once.
+  const roundKey = `set${item.set ?? state.currentSet}_round${item.round ?? state.currentRound}`;
+
+  const detectRuleId = (reasonText) => {
+    const text = String(reasonText || "");
+    if (text.includes("No one guessed holder")) return 1;
+    if (text.includes("Correct holder guess +5")) return 2;
+    if (text.includes("Catch bonus +5") || text.includes("Caught correct guesser: -5")) return 3;
+    if (text.includes("2+ correct bonus +5") || text.includes("Failed catch: -")) return 4;
+    return 2;
+  };
+
+  const inferSkillInfo = (seat) => {
+    const ev = item.roleEvents?.[seat - 1] || null;
+    if (ev) {
+      if (ev.empath?.peekTarget) return { used: true, picks: `P${ev.empath.peekTarget}` };
+      if (ev.illuminator) return { used: true, picks: `P${ev.illuminator.left}, P${ev.illuminator.right}` };
+      if (ev.oracle?.target) return { used: true, picks: `P${ev.oracle.target}` };
+      if (ev.corrupter?.target) return { used: true, picks: `P${ev.corrupter.target}` };
+      if (ev.hunter?.strike) return { used: true, picks: `P${ev.hunter.a}, P${ev.hunter.b}` };
+      if (ev.highroller) return { used: true, picks: `P${ev.highroller.g1 ?? "-"}, P${ev.highroller.g2 ?? "-"}` };
+      if (ev.siphon?.target) return { used: true, picks: `P${ev.siphon.target}` };
+    }
+    // Offline fallback: infer from reason text.
+    const role = String(item.roles?.[seat - 1] || "");
+    const reason = String(item.reasons?.[seat - 1] || "");
+    const m = reason.match(/P(\d+)/);
+    if (role === "The Oracle" && reason.includes("Oracle stole")) return { used: true, picks: m ? `P${m[1]}` : "—" };
+    if (role === "The Corrupter" && reason.includes("Corrupter hit")) return { used: true, picks: m ? `P${m[1]}` : "—" };
+    if (role === "The Hunter" && reason.includes("Hunter struck")) return { used: true, picks: m ? `P${m[1]}` : "—" };
+    if (role === "The High Roller" && reason.includes("High Roller targeted")) return { used: true, picks: "2 picks used" };
+    return { used: false, picks: "—" };
+  };
+
+  const render = (sgBySeat) => {
+    const mkNameBtn = (seat, label, extraClasses = "") => {
+      return `<button type="button"
+        class="underline decoration-cyan-400 hover:text-cyan-200 ${extraClasses}"
+        onclick="revealRoleTooltip(${roundIndex}, ${seat}, 'self')">${label}</button>`;
+    };
+
+    const guessName = (seat) => {
+      const nm = String((item.playerNames?.[seat - 1] || `P${seat}`)).trim();
+      return nm || `P${seat}`;
+    };
+
+    const roleName = (seat) => String(item.roles?.[seat - 1] || "").trim() || "—";
+    const guessSeat = (seat) => item.guesses?.[seat - 1] ?? null;
+    const delta = (seat) => Number(item.deltas?.[seat - 1] ?? 0);
+    const total = (seat) => Number(item.scores?.[seat - 1] ?? 0);
+
+    const skillInfo = (seat) => inferSkillInfo(seat);
+
+    const sgInfo = (seat) => {
+      const localSg = (item.sgEvents && item.sgEvents[seat]) ? item.sgEvents[seat] : null;
+      const sg = sgBySeat?.[seat] || localSg || null;
+      if (!sg) return { used: "N", usage: "—", claim: "—" };
+      if (sg.type === "redemption") return { used: "Y", usage: `+${sg.delta ?? 20} (Redemption)`, claim: "—" };
+      if (sg.type === "duel") return { used: "Y", usage: `Duel vs P${sg.target ?? "-"} (${sg.result || "done"})`, claim: `${sg.guess || "?"} vs ${sg.actual || "?"}` };
+      // Future types can be added here.
+      return { used: "Y", usage: String(sg.type || "used"), claim: sg.claim ?? "—" };
+    };
+
+    const rows = [];
+    for (let seat = 1; seat <= (item.roles?.length || state.numPlayers || 0); seat++) {
+      const name = guessName(seat);
+      const sInfo = skillInfo(seat);
+      const sg = sgInfo(seat);
+      const gSeat = guessSeat(seat);
+      const gLabel = gSeat ? guessName(gSeat) : "No vote";
+      const role = roleName(seat);
+      const d = delta(seat);
+      const t = total(seat);
+      const ruleId = detectRuleId(item.reasons?.[seat - 1] || "");
+      rows.push(`
+        <tr class="border-t border-zinc-700/70">
+          <td class="py-2 px-2">${mkNameBtn(seat, name, "text-cyan-200 font-bold")}</td>
+          <td class="py-2 px-2">
+            <button type="button" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-[10px] font-bold"
+              onclick="revealRoleTooltip(${roundIndex}, ${seat}, 'role')">Tap</button>
+          </td>
+          <td class="py-2 px-2">
+            ${gSeat ? `<button type="button" class="underline decoration-amber-400 hover:text-amber-200" onclick="revealRoleTooltip(${roundIndex}, ${gSeat}, 'guessed')">${gLabel}</button>` : `<span class="text-zinc-300">${gLabel}</span>`}
+          </td>
+          <td class="py-2 px-2 text-center font-bold ${sInfo.used ? "text-emerald-300" : "text-zinc-400"}">${sInfo.used ? "Y" : "N"}</td>
+          <td class="py-2 px-2 text-[10px] text-zinc-300">${sInfo.used ? sInfo.picks : "—"}</td>
+          <td class="py-2 px-2 text-center font-bold ${sg.used === "Y" ? "text-fuchsia-300" : "text-zinc-400"}">${sg.used}</td>
+          <td class="py-2 px-2 text-[10px] text-zinc-300">${sg.used === "Y" ? sg.usage : "—"}<div class="text-[9px] text-zinc-500">claim: ${sg.claim}</div></td>
+          <td class="py-2 px-2">
+            <button type="button" class="px-2 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-[10px] font-bold"
+              onclick="togglePointCalc('${roundIndex}_${seat}')">Calc</button>
+            <div id="calc_${roundIndex}_${seat}" class="hidden mt-2 text-[10px] leading-relaxed text-zinc-200">
+              <div class="text-cyan-200 font-bold mb-1">Point calculation</div>
+              <div class="text-zinc-300"><span class="text-amber-200">• Guess-based:</span> ${(item.reasons?.[seat - 1] || "").trim() || "Not logged."}</div>
+              <div class="text-zinc-300"><span class="text-emerald-200">• Skill-based:</span> ${sInfo.used ? `${role}: pick ${sInfo.picks}` : "No skill used."}</div>
+              <div class="text-zinc-300"><span class="text-fuchsia-200">• SG-based:</span> ${sg.used === "Y" ? sg.usage : "No SG used."}</div>
+              <div class="text-zinc-300 mt-1"><span class="text-sky-200">• Base rule:</span> Rule ${ruleId} applied
+                <button type="button" class="ml-1 underline decoration-sky-400 hover:text-sky-200" onclick="showPointRulesModal(${ruleId})">open rule ${ruleId}</button>
+              </div>
+              <div class="mt-1 font-bold ${d >= 0 ? "text-emerald-300" : "text-rose-300"}">Δ ${d >= 0 ? "+" : ""}${Math.round(d * 10) / 10}</div>
+            </div>
+          </td>
+          <td class="py-2 px-2 font-black ${t >= 0 ? "text-emerald-300" : "text-rose-300"}">${Math.round(t * 10) / 10}</td>
+        </tr>
+      `);
+    }
+
+    box.innerHTML = `
+      <div class="mb-3">
+        <div class="text-[10px] text-zinc-400">Set ${item.set ?? "?"} • Round ${item.round ?? "?"}</div>
+        <div class="text-lg font-bold text-amber-300">Announced: ${announced} <span class="text-zinc-300 font-normal">(${holderName})</span></div>
+        <div id="role-tooltip" class="hidden mt-2 px-3 py-2 rounded-2xl bg-zinc-800/80 border border-cyan-400/30 text-[10px] text-zinc-100"></div>
+      </div>
+
+      <div class="overflow-auto border border-zinc-700 rounded-2xl">
+        <table class="w-full text-[9px] md:text-[11px]">
+          <thead class="bg-zinc-800/80 text-zinc-100">
+            <tr>
+              <th class="text-left py-2 px-1">players</th>
+              <th class="text-left py-2 px-1">role</th>
+              <th class="text-left py-2 px-1">guess</th>
+              <th class="text-center py-2 px-1">skill?</th>
+              <th class="text-left py-2 px-1">picks</th>
+              <th class="text-center py-2 px-1">sg?</th>
+              <th class="text-left py-2 px-1">sg use</th>
+              <th class="text-left py-2 px-1">point div</th>
+              <th class="text-left py-2 px-1">total</th>
+            </tr>
+          </thead>
+          <tbody class="bg-zinc-900/40">
+            ${rows.join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-3 text-[10px] text-zinc-400">
+        Tip: click a <span class="text-cyan-200 font-bold">player name</span> to reveal their role briefly; click a <span class="text-amber-200 font-bold">guessed name</span> to reveal that guessed player’s role briefly.
+      </div>
+    `;
+  };
+
+  // Default render (no SG info yet)
+  render(null);
+
+  if (state.onlineMode && state.roomCode && window.db && window.rtdb) {
+    try {
+      const { ref, onValue } = window.rtdb;
+      const p = `rooms/${state.roomCode}/sg/${roundKey}`;
+      const unsub = onValue(ref(window.db, p), (snap) => {
+        const val = snap.val() || null;
+        // val shape: { [seatNumber]: { type, delta, ts, ... } }
+        const bySeat = {};
+        if (val && typeof val === "object") {
+          Object.keys(val).forEach((k) => {
+            const seat = Number(k);
+            if (!seat) return;
+            bySeat[seat] = val[k];
+          });
+        }
+        render(bySeat);
+        if (typeof unsub === "function") unsub();
+      });
+    } catch (e) {
+      // ignore; still show non-SG history
+    }
+  }
   show($("round-details-modal"));
+}
+
+function togglePointCalc(id) {
+  const el = document.getElementById(`calc_${id}`);
+  if (!el) return;
+  el.classList.toggle("hidden");
+}
+
+function revealRoleTooltip(roundIndex, seat, kind) {
+  const item = state.roundHistory?.[roundIndex];
+  if (!item) return;
+  const tip = document.getElementById("role-tooltip");
+  if (!tip) return;
+  const nm = String((item.playerNames?.[seat - 1] || `P${seat}`)).trim() || `P${seat}`;
+  const role = String((item.roles?.[seat - 1] || "—")).trim() || "—";
+  const color = roleToColor[role];
+  const roleInfo = color ? roleByColor[color] : null;
+  const prefix = kind === "guessed" ? "Guessed player" : "Player";
+  tip.innerHTML = `
+    <div><span class="text-cyan-200 font-bold">${prefix}:</span> ${nm} <span class="text-zinc-400">(${role})</span></div>
+    ${roleInfo ? `<div class="mt-1 text-amber-200">Ability: ${roleInfo.desc}</div><div class="text-[9px] text-zinc-300">Usage: ${roleInfo.usage}</div>` : ""}
+  `;
+  tip.classList.remove("hidden");
+  clearTimeout(revealRoleTooltip._t);
+  revealRoleTooltip._t = setTimeout(() => {
+    tip.classList.add("hidden");
+  }, 2200);
+}
+
+function showPointRulesModal(focusRule = null) {
+  const box = $("point-rules-content");
+  if (!box) return;
+  const rules = [
+    {
+      id: 1,
+      title: "Rule 1 — Nobody guesses holder",
+      body: "If nobody guesses the announced color holder, holder gets +5 from each other player. Holder-picked target gets -5.",
+      ex: `Random-Blue\n1-3(-5)\n2-1(0)\n3-2(0)\n*4-1(+15)`
+    },
+    {
+      id: 2,
+      title: "Rule 2 — At least one correct holder guess",
+      body: "Each player who guessed holder gets +5. No automatic -ve for incorrect guessers under this base rule.",
+      ex: `Random-Yellow\n1-4(0)\n*2-3(0)\n3-4(0)\n4-2(+5)`
+    },
+    {
+      id: 3,
+      title: "Rule 3 — Holder catches a correct guesser",
+      body: "If holder picks someone who also guessed holder correctly, that guessed player gets bonus +5 and holder gets -5.",
+      ex: `Random-Green\n1-2(0)\n2-3(+5, bonus +5)\n*3-2(-5)\n4-1(0)`
+    },
+    {
+      id: 4,
+      title: "Rule 4 — 2+ correct and holder fails catch",
+      body: "If at least 2 guessed holder and holder did not pick any of them, each correct guesser gets bonus +5; holder loses -5 for each correct guesser.",
+      ex: `Random-Red\n*1-4(-10)\n2-1(+5, bonus +5)\n3-1(+5, bonus +5)\n4-3(0)`
+    }
+  ];
+  box.innerHTML = rules.map((r) => `
+    <div id="point-rule-${r.id}" class="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4">
+      <div class="font-bold text-amber-300 mb-1">Rule ${r.id}</div>
+      <div class="text-zinc-100 font-bold mb-1">${r.title}</div>
+      <div class="text-zinc-300 text-xs mb-2">${r.body}</div>
+      <pre class="text-[10px] bg-zinc-900/70 border border-zinc-700 rounded-xl p-2 whitespace-pre-wrap">${r.ex}</pre>
+    </div>
+  `).join("");
+  show($("point-rules-modal"));
+  if (focusRule) {
+    setTimeout(() => {
+      const el = document.getElementById(`point-rule-${focusRule}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 30);
+  }
+}
+
+function hidePointRulesModal() {
+  hide($("point-rules-modal"));
 }
 
 function hideRoundDetailsModal() {
@@ -3571,7 +4211,40 @@ function hideRoundDetailsModal() {
 }
 
 function startNewSet() {
-  location.reload();
+  state.gameOver = false;
+  state.currentSet += 1;
+  state.currentRound = 0;
+  state.roundInProgress = false;
+  state.highRollerUsed = false;
+  state.executionerUsed = false;
+  state.playerGuess = null;
+  state.prevRoundGuesses = [];
+  state.prevAnnouncedColor = null;
+  state.currentRoundSgEvents = {};
+  updateRoundInfo();
+  renderCircle();
+  dom.status.innerHTML = `<div class="text-emerald-300 text-lg mb-2">Set ${state.currentSet} started</div><div>Click START ROUND to begin Round 1.</div>`;
+  const startBtn = $("start-round-btn");
+  if (startBtn) {
+    startBtn.disabled = false;
+    startBtn.classList.remove("opacity-60", "cursor-not-allowed");
+  }
+}
+
+function forceEndGame() {
+  state.gameOver = true;
+  showFinalBoard("Game ended manually.");
+}
+
+function goHome() {
+  window.location.href = "/";
+}
+
+function syncRoleResultVisibility() {
+  const wrap = $("role-modal-result-wrap");
+  const msg = $("role-modal-result");
+  if (!wrap || !msg) return;
+  wrap.classList.toggle("hidden", !String(msg.textContent || "").trim());
 }
 
 // Modal utils
@@ -3596,27 +4269,16 @@ window.onload = () => {
     }
   }
 
-  // If URL is already a room (e.g. /4BKZ3J), auto-join and resume.
+  // If URL is already a room (e.g. /4BKZ3J), open lobby with code prefilled.
   const roomFromUrl = getRoomCodeFromPath() || getRoomCodeFromQuery();
   const { playerName } = ensureLocalIdentity();
   if (roomFromUrl) {
-    state.roomCode = roomFromUrl;
-    // Start listening to Firebase immediately for real-time updates
-    if (window.db && window.rtdb) {
-      listenToFirebaseRoom(roomFromUrl);
-    }
     startOnlineMode();
     if ($("mp-room-input")) $("mp-room-input").value = roomFromUrl;
     if ($("mp-name-input") && playerName) $("mp-name-input").value = playerName;
-    if (playerName) {
-      // Small delay to ensure Firebase connection is ready
-      setTimeout(() => {
-        joinRoom();
-      }, 100);
-    } else {
-      // User needs to enter name; we keep them on the lobby screen.
-      show($("multiplayer-screen"));
-    }
+    if ($("mp-name-input-join") && playerName) $("mp-name-input-join").value = playerName;
+    setLobbyTab("join");
+    show($("multiplayer-screen"));
   }
 
   // Mobile sidebar toggle
@@ -3642,6 +4304,13 @@ window.onload = () => {
       else if (id === "mp-lobby-chat-input") sendLobbyChatMessage();
     });
   });
+
+  // Role result block should show only when there is text.
+  const roleMsg = $("role-modal-result");
+  if (roleMsg && typeof MutationObserver !== "undefined") {
+    new MutationObserver(syncRoleResultVisibility).observe(roleMsg, { childList: true, characterData: true, subtree: true });
+    syncRoleResultVisibility();
+  }
 };
 </script>
 </body>
