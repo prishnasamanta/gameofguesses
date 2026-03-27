@@ -204,6 +204,28 @@ body {
   flex: 1 1 auto;
   font-size: 16px;
 }
+.modal-scroll {
+  max-height: min(92vh, 920px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.modal-scroll .modal-sticky-header {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgb(24 24 27);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(63, 63, 70, 0.6);
+}
+.modal-scroll .modal-scroll-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 @media (max-width: 640px) {
   #start-screen h1 { font-size: clamp(1.75rem, 10vw, 3rem); line-height: 1.15; }
   #multiplayer-screen .flex.gap-3 { flex-wrap: wrap; justify-content: center; }
@@ -423,6 +445,10 @@ SET 1 • ROUND 0 / ?
       <option value="11">11 Players</option>
       <option value="12">12 Players</option>
     </select>
+    <label class="flex items-center w-full max-w-md min-h-[74px] bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 text-center justify-center gap-3 cursor-pointer">
+      <input type="checkbox" id="mp-till-result-toggle" class="rounded border-zinc-600" />
+      <span class="text-sm text-zinc-200">Game till result (ignore fixed set limit — match ends only when team win rules trigger)</span>
+    </label>
     <div class="flex gap-3">
       <button onclick="backToStartFromLobby()" class="px-6 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 font-bold">← Back</button>
       <button onclick="createRoom()" class="px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 font-bold">Create Room</button>
@@ -457,9 +483,10 @@ SET 1 • ROUND 0 / ?
 <div id="guess-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
 <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-yellow-400/40 modal">
 <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ANNOUNCED COLOR</div>
-<div id="modal-announced-color" class="text-3xl md:text-4xl font-bold text-center mb-4 px-6 py-3 rounded-2xl inline-block mx-auto"></div>
+<div id="modal-announced-color" class="text-3xl md:text-4xl font-bold text-center mb-2 px-6 py-3 rounded-2xl inline-block mx-auto"></div>
+<div id="modal-announced-category" class="text-center text-sm font-bold mb-4 text-zinc-300"></div>
 <p id="guess-instruction" class="text-center text-sm md:text-base mb-4 text-zinc-200">Click a seat on the table to guess.</p>
-<div id="guess-skill-info" class="text-center text-xs md:text-sm text-cyan-300 mb-3"></div>
+<div id="guess-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></div>
 <div id="modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-6"></div>
 <div class="text-center mb-3">
   <button onclick="submitPlayerGuess()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Submit Guess</button>
@@ -480,6 +507,7 @@ SET 1 • ROUND 0 / ?
     <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ROLE ACTION</div>
     <h2 id="role-modal-title" class="text-2xl md:text-3xl text-center mb-2">Role Action</h2>
     <p id="role-modal-desc" class="text-center text-sm md:text-base mb-4 text-zinc-200"></p>
+    <p id="role-modal-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></p>
     <div id="role-modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-4"></div>
     <p id="role-modal-instruction" class="hidden text-center text-xs md:text-sm text-zinc-300 mb-4">Select players on the table.</p>
     <div id="role-modal-result-wrap" class="hidden text-center">
@@ -524,12 +552,12 @@ SET 1 • ROUND 0 / ?
 
 <!-- RULES MODAL -->
 <div id="rules-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
-  <div class="bg-zinc-900 rounded-3xl p-6 md:p-8 w-full max-w-3xl border border-cyan-400/40 max-h-[90vh] overflow-auto">
-    <div class="flex items-center justify-between mb-3">
+  <div class="bg-zinc-900 rounded-3xl p-6 md:p-8 w-full max-w-3xl border border-cyan-400/40 max-h-[90vh] modal-scroll">
+    <div class="modal-sticky-header flex items-center justify-between mb-0">
       <h2 class="text-2xl md:text-3xl font-bold text-cyan-300">Point + Role Rules</h2>
       <button onclick="hideRulesModal()" class="text-zinc-300 hover:text-white">✕</button>
     </div>
-    <div id="rules-content" class="text-sm md:text-base text-zinc-200 leading-relaxed space-y-2"></div>
+    <div id="rules-content" class="modal-scroll-body text-sm md:text-base text-zinc-200 leading-relaxed space-y-2 pt-3"></div>
   </div>
 </div>
 
@@ -546,26 +574,26 @@ SET 1 • ROUND 0 / ?
 
 <!-- ROUND DETAILS MODAL -->
 <div id="round-details-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
-  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-2xl border border-cyan-400/40 max-h-[90vh] overflow-auto">
-    <div class="flex items-center justify-between mb-3">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-2xl border border-cyan-400/40 max-h-[90vh] modal-scroll">
+    <div class="modal-sticky-header flex items-center justify-between mb-0">
       <div class="flex items-center gap-2">
         <h2 class="text-2xl font-bold text-cyan-300">Round Details</h2>
         <button onclick="showPointRulesModal()" title="Point system" class="w-7 h-7 rounded-full bg-cyan-700 hover:bg-cyan-800 text-white text-sm font-black">?</button>
       </div>
       <button onclick="hideRoundDetailsModal()" class="text-zinc-300 hover:text-white">✕</button>
     </div>
-    <div id="round-details-content" class="text-sm text-zinc-200 space-y-2"></div>
+    <div id="round-details-content" class="modal-scroll-body text-sm text-zinc-200 space-y-2 pt-3"></div>
   </div>
 </div>
 
 <!-- POINT RULES MODAL -->
 <div id="point-rules-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
-  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-3xl border border-amber-400/40 max-h-[90vh] overflow-auto">
-    <div class="flex items-center justify-between mb-3">
+  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-3xl border border-amber-400/40 max-h-[90vh] modal-scroll">
+    <div class="modal-sticky-header flex items-center justify-between mb-0">
       <h2 class="text-2xl font-bold text-amber-300">Point System</h2>
       <button onclick="hidePointRulesModal()" class="text-zinc-300 hover:text-white">✕</button>
     </div>
-    <div id="point-rules-content" class="text-sm text-zinc-200 space-y-3"></div>
+    <div id="point-rules-content" class="modal-scroll-body text-sm text-zinc-200 space-y-3 pt-3"></div>
   </div>
 </div>
 
@@ -1140,6 +1168,7 @@ function showRulesModal() {
           <div><b>Rule 2:</b> At least one correct holder guess -> each correct gets +5.</div>
           <div><b>Rule 3:</b> Holder catches a correct guesser -> catcher bonus +5, holder -5.</div>
           <div><b>Rule 4:</b> 2+ correct and holder fails catch -> bonus to correct guessers, holder loses per correct.</div>
+          <div class="mt-2 pt-2 border-t border-sky-500/20"><b>SG card (once per game):</b> Redemption grants +20, or Category Duel vs another player (±15 swing by Light/Dark guess). SG points stack with guess + skill in the round you use it.</div>
         </div>
         <button onclick="showPointRulesModal()" class="mt-3 px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-xs font-bold">Open full point rules + examples</button>
       </div>
@@ -1424,7 +1453,10 @@ function joinRoom() {
 
 function startMultiplayerMatch() {
   if (!state.roomCode || !state.isHost) return;
-  state.socket.emit("start_match", { roomCode: state.roomCode });
+  state.socket.emit("start_match", {
+    roomCode: state.roomCode,
+    gameTillResult: !!$("mp-till-result-toggle")?.checked
+  });
 }
 
 function updateTargetPlayers() {
@@ -1477,7 +1509,8 @@ function ensureSocket() {
     startSimulation(payload.targetPlayers, {
       myId: myIdx + 1,
       assignedRoles: payload.assignedRoles,
-      playerNames: payload.playerNames
+      playerNames: payload.playerNames,
+      gameTillResult: typeof payload.gameTillResult === "boolean" ? payload.gameTillResult : undefined
     });
     localStorage.setItem("gog_mySeatIndex", String(myIdx + 1));
     if (state.isHost && window.db && window.rtdb) {
@@ -2378,7 +2411,13 @@ function startSimulation(n, config = null) {
   state.activeAbilityRole = null;
   state.gambledSkipNextDouble = false;
   state.sgUsed = false;
-  state.gameTillResult = !!$("till-result-toggle")?.checked;
+  if (config?.gameTillResult != null) {
+    state.gameTillResult = !!config.gameTillResult;
+  } else {
+    state.gameTillResult = state.onlineMode
+      ? !!$("mp-till-result-toggle")?.checked
+      : !!$("till-result-toggle")?.checked;
+  }
   state.violetTargetId = null;
   state.gameOver = false;
   state.siphonUsed = false;
@@ -2729,6 +2768,26 @@ function makeSeatsClickable(actionType) {
 }
 
 // ==================== ROLE MODAL (user actions) ====================
+function setRoleModalSkillInfo(roleName) {
+  const el = $("role-modal-skill-info");
+  if (!el) return;
+  const roleEntry = roles.find((r) => r.role === roleName);
+  if (roleEntry) {
+    el.textContent = `Skill info: ${roleEntry.role} — ${roleEntry.desc}`;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
+
+function clearRoleModalSkillInfo() {
+  const el = $("role-modal-skill-info");
+  if (!el) return;
+  el.textContent = "";
+  el.classList.add("hidden");
+}
+
 function openInformationRoleModal(roleName, infoHtml) {
   const roleObj = roles.find((r) => r.role === roleName);
   dom.roleModalTitle.textContent = roleName;
@@ -2746,6 +2805,7 @@ function openInformationRoleModal(roleName, infoHtml) {
   if (tbtn) tbtn.classList.add("hidden");
   const cbtn = $("role-continue-btn");
   if (cbtn) cbtn.classList.remove("hidden");
+  clearRoleModalSkillInfo();
   show(dom.roleModal);
 }
 
@@ -2778,13 +2838,10 @@ function openRoleActionModal(roleName) {
     <div class="text-base md:text-lg text-cyan-300 text-center">${abilityName}</div>
     ${usageText ? `<div class="text-xs text-amber-300 text-center mt-1">${usageText}</div>` : ""}
   `;
-  dom.roleModalDesc.innerHTML = `
-    <button onclick="showRoleDetailPopup('${roleName}')" class="px-3 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-xs mb-3">
-      📖 View Detailed Info
-    </button>
-  `;
+  dom.roleModalDesc.innerHTML = "";
+  setRoleModalSkillInfo(roleName);
   if (roleName === "The High Roller") {
-    dom.roleModalDesc.innerHTML += `<p class="text-xs text-amber-300 mt-2">Current announced color: ${state.announcedColor || "-"}</p>`;
+    dom.roleModalDesc.innerHTML = `<p class="text-xs text-amber-300 mt-2">Current announced color: ${state.announcedColor || "-"}</p>`;
   }
   dom.roleModalResult.textContent = "";
   const rwrap = $("role-modal-result-wrap");
@@ -3068,10 +3125,8 @@ function openEmpathWaitingModal() {
     <div class="text-base md:text-lg text-pink-300 text-center">Sense Suspicion</div>
     <div class="text-xs text-amber-300 text-center mt-1">Every Round</div>
   `;
+  setRoleModalSkillInfo("The Empath");
   dom.roleModalDesc.innerHTML = `
-    <button onclick="showRoleDetailPopup('The Empath')" class="px-3 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-xs mb-3">
-      📖 View Detailed Info
-    </button>
     <p class="mb-3 text-zinc-200 text-sm">Pick one player on the table, press Apply Role, then wait until that player submits.</p>
     <div id="empath-wait-status" class="text-sm text-zinc-200 mt-3"></div>
   `;
@@ -3150,8 +3205,8 @@ function continueToGuessFromRole() {
   dom.roleModalCircle.classList.remove("hidden");
   const instr = $("role-modal-instruction");
   if (instr) instr.classList.remove("hidden");
+  clearRoleModalSkillInfo();
   hide(dom.roleModal);
-  openGuessModal();
 }
 
 function renderRoleSelectionCircle(requiredCount, selectable) {
@@ -3310,6 +3365,20 @@ function openGuessModal() {
   dom.modalColor.style.background = announcedHex;
   dom.modalColor.style.color = getContrastingText(announcedHex);
   dom.modalColor.textContent = state.announcedColor;
+  const catEl = $("modal-announced-category");
+  if (catEl) {
+    const cat = colorCategory[state.announcedColor] || "";
+    if (cat === "LIGHT") {
+      catEl.textContent = "☀ LIGHT (this color belongs to the Light team)";
+      catEl.className = "text-center text-sm font-bold mb-4 text-amber-200";
+    } else if (cat === "DARK") {
+      catEl.textContent = "☾ DARK (this color belongs to the Dark team)";
+      catEl.className = "text-center text-sm font-bold mb-4 text-violet-200";
+    } else {
+      catEl.textContent = cat ? String(cat) : "";
+      catEl.className = "text-center text-sm font-bold mb-4 text-zinc-300";
+    }
+  }
 
   // High Roller can skip guess button not used here; keep hidden by default.
   const myRole = state.assignedRoles[state.myId - 1];
@@ -3326,9 +3395,8 @@ function openGuessModal() {
   }
   const skill = $("guess-skill-info");
   if (skill) {
-    const myRole = state.assignedRoles[state.myId - 1];
-    const roleEntry = roles.find((r) => r.role === myRole);
-    skill.textContent = roleEntry ? `Skill info: ${roleEntry.role} — ${roleEntry.desc}` : "";
+    skill.textContent = "";
+    skill.classList.add("hidden");
   }
   show(dom.modal);
 }
@@ -3739,6 +3807,9 @@ function calculateRound() {
     }
   }
 
+  // Snapshot guess-rule points only (holder/correct/catch/rule4 + later no-vote); skill/SG layered on top.
+  const guessOnlyDeltas = deltas.map((x) => x);
+
   // Role adjustments that still apply with this system:
   // Avenger: if holder is Avenger and you guessed holder correctly, you lose 10 extra.
   const holderRole = state.assignedRoles[holderId - 1];
@@ -3877,6 +3948,7 @@ function calculateRound() {
     if (guesses[p] === null) {
       deltas[p - 1] -= 25;
       reasons[p - 1] += "No vote penalty -25. ";
+      guessOnlyDeltas[p - 1] -= 25;
     }
   }
 
@@ -3885,7 +3957,14 @@ function calculateRound() {
     if (isPlayerFrozenByScore(p)) {
       deltas[p - 1] = 0;
       reasons[p - 1] += "Eliminated by score floor: no point change. ";
+      guessOnlyDeltas[p - 1] = 0;
     }
+  }
+
+  const sgDeltasSnapshot = new Array(state.numPlayers).fill(0);
+  for (let p = 1; p <= state.numPlayers; p++) {
+    const ev = state.currentRoundSgEvents && state.currentRoundSgEvents[p];
+    if (ev && typeof ev.delta === "number") sgDeltasSnapshot[p - 1] = ev.delta;
   }
 
   // Apply deltas to all players.
@@ -3932,8 +4011,11 @@ function calculateRound() {
     round: state.currentRound,
     announcedColor: state.announcedColor,
     holderId,
+    holderPick: guesses[holderId] == null ? null : guesses[holderId],
     guesses: guesses.slice(1),
     deltas: [...deltas],
+    guessOnlyDeltas: [...guessOnlyDeltas],
+    sgDeltasSnapshot: [...sgDeltasSnapshot],
     reasons: [...reasons],
     roles: [...state.assignedRoles],
     scores: [...state.playerScores],
@@ -3956,6 +4038,10 @@ function calculateRound() {
   if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
     showFinalBoard();
     return;
+  }
+
+  if (state.gameTillResult && state.onlineMode && state.currentRound >= state.numPlayers) {
+    showOnlineSetWrap();
   }
 
   if (state.chatTimer) clearTimeout(state.chatTimer);
@@ -4007,6 +4093,28 @@ function calculateRound() {
   }
 }
 
+function showOnlineSetWrap() {
+  const teamGoal = 250 * Math.ceil(state.numPlayers / 2);
+  const cur = dom.status?.innerHTML || "";
+  dom.status.innerHTML = `
+    <div class="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3 mb-3 text-[11px] sm:text-xs text-amber-100 max-w-2xl mx-auto">
+      <span class="font-bold text-amber-300">Set ${state.currentSet} wrapped.</span>
+      Playing until a team wins: Light or Dark combined score ${teamGoal}, or only one category remains. Outcome will show as Light won / Dark won (not a fixed set count).
+    </div>
+    ${cur}
+  `;
+}
+
+function formatGameEndTitle(reason) {
+  if (!reason) return "SET COMPLETE!";
+  if (reason.includes("LIGHT combined")) return "LIGHT TEAM WINS";
+  if (reason.includes("DARK combined")) return "DARK TEAM WINS";
+  if (reason.includes("All remaining players are LIGHT")) return "LIGHT WINS";
+  if (reason.includes("All remaining players are DARK")) return "DARK WINS";
+  if (reason.includes("manually")) return "GAME ENDED";
+  return "GAME OVER";
+}
+
 function showFinalBoard(reason = "") {
   const sgBtn = $("sg-btn");
   if (sgBtn) {
@@ -4022,21 +4130,21 @@ function showFinalBoard(reason = "") {
     const pname = String(state.playerNames?.[i - 1] || `Player ${i}`);
     const score = Array.isArray(state.playerScores) ? (state.playerScores[i - 1] ?? 0) : (i === state.myId ? state.myScore : 0);
     html += `
-      <div class="flex items-center gap-6 bg-zinc-800/90 rounded-3xl p-6 border ${i===state.myId?'border-yellow-400':''}">
-        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black" style="background:${roleColorMap[role]}; color:${getContrastingText(roleColorMap[role])}">
+      <div class="flex items-center gap-3 sm:gap-6 bg-zinc-800/90 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border ${i===state.myId?'border-yellow-400':''}">
+        <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-3xl font-black shrink-0" style="background:${roleColorMap[role]}; color:${getContrastingText(roleColorMap[role])}">
           P${i}
         </div>
-        <div class="flex-1">
-          <div class="text-2xl">${pname}</div>
-          <div class="text-xs text-zinc-400">${role}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-lg sm:text-2xl truncate">${pname}</div>
+          <div class="text-[10px] sm:text-xs text-zinc-400">${role}</div>
         </div>
-        ${i - 1 === winnerIdx ? `<div class="px-3 py-1 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-xs font-bold">WINNER</div>` : ""}
-        <div class="text-4xl font-black text-emerald-400">${score}</div>
+        ${i - 1 === winnerIdx ? `<div class="px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg sm:rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[10px] sm:text-xs font-bold shrink-0">WINNER</div>` : ""}
+        <div class="text-2xl sm:text-4xl font-black text-emerald-400 shrink-0">${score}</div>
       </div>`;
   }
   dom.status.innerHTML = `
-    <h2 class="text-5xl font-bold text-emerald-400 text-center mb-10">SET COMPLETE!</h2>
-    ${reason ? `<div class="text-center text-rose-300 mb-4">${reason}</div>` : ""}
+    <h2 class="text-2xl sm:text-5xl font-bold text-emerald-400 text-center mb-6 sm:mb-10">${formatGameEndTitle(reason)}</h2>
+    ${reason ? `<div class="text-center text-rose-300 mb-4 text-sm sm:text-base">${reason}</div>` : ""}
     <div class="space-y-6 max-w-3xl mx-auto">${html}</div>
     <div class="mt-12 flex flex-col sm:flex-row flex-wrap justify-center items-stretch gap-4 max-w-3xl mx-auto px-2">
       <button onclick="startNewSet()" class="px-8 sm:px-12 py-5 sm:py-6 bg-emerald-600 hover:bg-emerald-700 rounded-3xl text-lg sm:text-xl font-bold shadow-xl transition">NEW SET</button>
@@ -4118,6 +4226,174 @@ function hideScoresModal() {
   hide($("scores-modal"));
 }
 
+const PER_ROUND_SKILL_ROLES = new Set([
+  "The Illuminator",
+  "The Oracle",
+  "The Empath",
+  "The Corrupter",
+  "The Hunter",
+  "The High Roller",
+  "The Reflector",
+  "The Merchant"
+]);
+
+function inferGuessRuleMetaFromRound(item) {
+  const n = item.roles?.length || state.numPlayers || 0;
+  const holderId = item.holderId;
+  const guesses = item.guesses || [];
+  if (!holderId || !guesses.length) {
+    return {
+      id: 2,
+      label: "Rule 2 — At least one correct holder guess",
+      holderPick: null,
+      correctGuessers: [],
+      holderId: holderId || 0
+    };
+  }
+  const holderPick = item.holderPick != null ? item.holderPick : guesses[holderId - 1];
+  const correctGuessers = [];
+  for (let p = 1; p <= n; p++) {
+    if (p === holderId) continue;
+    if (guesses[p - 1] === holderId) correctGuessers.push(p);
+  }
+  const hasAny = correctGuessers.length >= 1;
+  const hasTwo = correctGuessers.length >= 2;
+  const holderCaught = hasAny && holderPick != null && correctGuessers.includes(holderPick);
+
+  if (!hasAny) {
+    return { id: 1, label: "Rule 1 — Nobody guessed holder", holderPick, correctGuessers };
+  }
+  if (hasTwo && !holderCaught) {
+    return { id: 4, label: "Rule 4 — 2+ correct, holder failed catch", holderPick, correctGuessers };
+  }
+  if (holderCaught) {
+    return { id: 3, label: "Rule 3 — Holder caught a correct guesser", holderPick, correctGuessers };
+  }
+  return { id: 2, label: "Rule 2 — At least one correct holder guess", holderPick, correctGuessers };
+}
+
+function guessPointsNarrative(seat, item, meta) {
+  const g = item.guesses?.[seat - 1] ?? null;
+  const h = item.holderId;
+  const n = item.roles?.length || state.numPlayers;
+  const pick = meta.holderPick != null ? meta.holderPick : item.holderPick;
+  if (g == null) return "No vote: guess layer includes the −25 no-vote penalty.";
+  if (meta.id === 1) {
+    if (seat === h) return `Holder: +5 × ${Math.max(0, n - 1)} others (nobody guessed you).`;
+    if (pick === seat) return "Holder’s pick while Rule 1 applies: −5.";
+    return "Guess not on holder; Rule 1 scoring context.";
+  }
+  if (g === h) {
+    const bits = ["+5 correct guess of holder"];
+    if (meta.id === 3 && pick === seat) bits.push("+5 catch bonus (holder picked you)");
+    if (meta.id === 4) bits.push("+5 failed-catch bonus");
+    return bits.join("; ") + ".";
+  }
+  return "Guess scoring follows Rule " + meta.id + " for this round.";
+}
+
+function pointsFromOthersTargetingSeat(seat, item) {
+  const notes = [];
+  let pts = 0;
+  const re = item.roleEvents;
+  const n = item.roles?.length || 0;
+  const hid = item.holderId;
+  if (!re || !Array.isArray(re)) return { pts: 0, notes: "" };
+  for (let p = 1; p <= n; p++) {
+    if (p === seat) continue;
+    const ev = re[p - 1];
+    if (!ev) continue;
+    if (ev.oracle?.target === seat && (ev.oracle.stolen || 0) > 0) {
+      pts -= 10;
+      notes.push(`Oracle P${p} (−10)`);
+    }
+    if (ev.corrupter?.target === seat) {
+      const dmg = ev.corrupter.dmg || 0;
+      pts -= dmg;
+      notes.push(`Corrupter P${p} (−${dmg})`);
+    }
+    if (ev.hunter?.strike === seat && (ev.hunter.dmg || 0) > 0) {
+      pts -= 30;
+      notes.push(`Hunter P${p} (−30)`);
+    }
+    if (ev.highroller && (ev.highroller.g1 === seat || ev.highroller.g2 === seat)) {
+      pts -= 10;
+      if (seat === hid) pts -= 5;
+      notes.push(`High Roller P${p}`);
+    }
+  }
+  return { pts, notes: notes.join("; ") };
+}
+
+function pointsFromOwnSkillEvent(seat, item) {
+  const ev = item.roleEvents?.[seat - 1];
+  if (!ev) return { pts: 0, label: "" };
+  if ((ev.oracle?.stolen || 0) > 0) return { pts: 10, label: "Oracle steal" };
+  if (ev.highroller?.silverJackpot) return { pts: 100, label: "Silver jackpot" };
+  return { pts: 0, label: "" };
+}
+
+function passiveSkillBits(reasonText) {
+  const r = String(reasonText || "");
+  const parts = [];
+  if (r.includes("Reflected by Reflector")) parts.push("Reflector");
+  if (r.includes("Merchant modifier")) parts.push("Merchant trade");
+  if (r.includes("Guessed Merchant")) parts.push("Merchant guess penalty");
+  return parts;
+}
+
+function passiveSkillPickDetails(seat, role, item) {
+  const guessedBy = [];
+  const n = item.roles?.length || 0;
+  for (let p = 1; p <= n; p++) {
+    if (p === seat) continue;
+    if (item.guesses?.[p - 1] === seat) guessedBy.push(`P${p}`);
+  }
+  if (role === "The Reflector") return guessedBy.length ? `Guessed by: ${guessedBy.join(", ")}` : "Guessed by: none";
+  if (role === "The Merchant") return guessedBy.length ? `Targeted by guesses: ${guessedBy.join(", ")}` : "Targeted by guesses: none";
+  return "—";
+}
+
+function roundLightDarkTeamsHtml(item) {
+  const iconByColor = {
+    YELLOW: "☀",
+    PINK: "♥",
+    NEON: "✦",
+    GOLD: "♦",
+    LIME: "↺",
+    ORANGE: "⛃",
+    GREEN: "☠",
+    BROWN: "⚑",
+    VIOLET: "⟲",
+    SILVER: "⚗",
+    RED: "✧",
+    BLUE: "⟡"
+  };
+  const light = [];
+  const dark = [];
+  const n = item.roles?.length || 0;
+  for (let p = 1; p <= n; p++) {
+    const role = item.roles[p - 1];
+    const c = roleToColor[role] || "";
+    const cat = colorCategory[c] || "DARK";
+    const ic = iconByColor[c] || "✦";
+    const badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-zinc-800 border border-zinc-600 text-[10px] font-bold">${ic} P${p}</span>`;
+    if (cat === "LIGHT") light.push(badge);
+    else dark.push(badge);
+  }
+  return `
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+      <div class="border border-amber-400/30 rounded-xl p-2 bg-amber-500/5 min-h-[3rem]">
+        <div class="text-[10px] text-amber-300 font-bold mb-1">☀ Light</div>
+        <div class="flex flex-wrap gap-1">${light.join("") || "—"}</div>
+      </div>
+      <div class="border border-violet-400/30 rounded-xl p-2 bg-violet-500/5 min-h-[3rem]">
+        <div class="text-[10px] text-violet-300 font-bold mb-1">☾ Dark</div>
+        <div class="flex flex-wrap gap-1">${dark.join("") || "—"}</div>
+      </div>
+    </div>`;
+}
+
 function showRoundDetailsModal(roundIndex) {
   const item = state.roundHistory[roundIndex];
   if (!item) return;
@@ -4130,43 +4406,48 @@ function showRoundDetailsModal(roundIndex) {
   // SG: fetch online SG events (redemption) and re-render once.
   const roundKey = `set${item.set ?? state.currentSet}_round${item.round ?? state.currentRound}`;
 
-  const detectRuleId = (reasonText) => {
-    const text = String(reasonText || "");
-    if (text.includes("No one guessed holder")) return 1;
-    if (text.includes("Correct holder guess +5")) return 2;
-    if (text.includes("Catch bonus +5") || text.includes("Caught correct guesser: -5")) return 3;
-    if (text.includes("2+ correct bonus +5") || text.includes("Failed catch: -")) return 4;
-    return 2;
-  };
-
   const inferSkillInfo = (seat) => {
     const ev = item.roleEvents?.[seat - 1] || null;
+    const role = String(item.roles?.[seat - 1] || "");
     if (ev) {
-      if (ev.empath?.peekTarget) return { used: true, picks: `P${ev.empath.peekTarget}` };
-      if (ev.illuminator) return { used: true, picks: `P${ev.illuminator.left}, P${ev.illuminator.right}` };
-      if (ev.oracle?.target) return { used: true, picks: `P${ev.oracle.target}` };
+      if (ev.empath?.peekTarget) return { used: true, picks: `Peek P${ev.empath.peekTarget}` };
+      if (ev.illuminator) {
+        const il = ev.illuminator;
+        const same = il.sameCategory != null ? (il.sameCategory ? "Yes" : "No") : "?";
+        return { used: true, picks: `Neighbors P${il.left} & P${il.right}; same category: ${same}` };
+      }
+      if (ev.oracle?.target) return { used: true, picks: `Target P${ev.oracle.target}` };
       if (ev.corrupter?.target) return { used: true, picks: `P${ev.corrupter.target}` };
-      if (ev.hunter?.strike) return { used: true, picks: `P${ev.hunter.a}, P${ev.hunter.b}` };
+      if (ev.hunter?.strike) return { used: true, picks: `A/B P${ev.hunter.a}, P${ev.hunter.b} → strike P${ev.hunter.strike}` };
       if (ev.highroller) return { used: true, picks: `P${ev.highroller.g1 ?? "-"}, P${ev.highroller.g2 ?? "-"}` };
       if (ev.siphon?.target) return { used: true, picks: `P${ev.siphon.target}` };
     }
-    // Offline fallback: infer from reason text.
-    const role = String(item.roles?.[seat - 1] || "");
     const reason = String(item.reasons?.[seat - 1] || "");
     const m = reason.match(/P(\d+)/);
+    if (role === "The Illuminator") {
+      const n = item.roles?.length || state.numPlayers || 0;
+      const left = ((seat - 2 + n) % n) + 1;
+      const right = (seat % n) + 1;
+      const leftRole = item.roles?.[left - 1];
+      const rightRole = item.roles?.[right - 1];
+      const leftCat = colorCategory[roleToColor[leftRole]] || "?";
+      const rightCat = colorCategory[roleToColor[rightRole]] || "?";
+      const same = leftCat !== "?" && rightCat !== "?" ? (leftCat === rightCat ? "Yes" : "No") : "?";
+      return { used: true, picks: `Neighbors P${left} & P${right}; same category: ${same}` };
+    }
+    if (role === "The Reflector" || role === "The Merchant") {
+      return { used: true, picks: passiveSkillPickDetails(seat, role, item) };
+    }
     if (role === "The Oracle" && reason.includes("Oracle stole")) return { used: true, picks: m ? `P${m[1]}` : "—" };
     if (role === "The Corrupter" && reason.includes("Corrupter hit")) return { used: true, picks: m ? `P${m[1]}` : "—" };
     if (role === "The Hunter" && reason.includes("Hunter struck")) return { used: true, picks: m ? `P${m[1]}` : "—" };
     if (role === "The High Roller" && reason.includes("High Roller targeted")) return { used: true, picks: "2 picks used" };
+    if (PER_ROUND_SKILL_ROLES.has(role)) return { used: true, picks: "—" };
     return { used: false, picks: "—" };
   };
 
   const render = (sgBySeat) => {
-    const mkNameBtn = (seat, label, extraClasses = "") => {
-      return `<button type="button"
-        class="underline decoration-cyan-400 hover:text-cyan-200 ${extraClasses}"
-        onclick="revealRoleTooltip(${roundIndex}, ${seat}, 'self')">${label}</button>`;
-    };
+    const roundMeta = inferGuessRuleMetaFromRound(item);
 
     const guessName = (seat) => {
       const nm = String((item.playerNames?.[seat - 1] || `P${seat}`)).trim();
@@ -4195,21 +4476,12 @@ function showRoundDetailsModal(roundIndex) {
       return m.reduce((acc, token) => acc + (Number(token) || 0), 0);
     };
 
-    const calcSkillPoints = (seat, role, sInfo) => {
-      if (!sInfo.used) return 0;
-      const r = String(item.reasons?.[seat - 1] || "");
-      const own = sumSignedFromText(r);
-      return Number.isFinite(own) ? own : 0;
-    };
-
-    const skillUsedFlags = [];
     const sgUsedFlags = [];
     const rows = [];
     for (let seat = 1; seat <= (item.roles?.length || state.numPlayers || 0); seat++) {
       const name = guessName(seat);
       const sInfo = skillInfo(seat);
       const sg = sgInfo(seat);
-      skillUsedFlags.push(!!sInfo.used);
       sgUsedFlags.push(sg.used === "Y");
       const gSeat = guessSeat(seat);
       const gLabel = gSeat ? guessName(gSeat) : "No vote";
@@ -4218,13 +4490,39 @@ function showRoundDetailsModal(roundIndex) {
       const roleText = getContrastingText(roleHex);
       const d = delta(seat);
       const t = total(seat);
-      const ruleId = detectRuleId(item.reasons?.[seat - 1] || "");
-      const guessNote = !gSeat
-        ? "No vote."
-        : (gSeat === (item.holderId || 0) ? `Guessed holder correctly (P${gSeat}).` : `Guessed P${gSeat} (not holder).`);
-      const sgDelta = sg.used === "Y" ? sumSignedFromText(sg.usage) : 0;
-      const skillDelta = calcSkillPoints(seat, role, sInfo);
-      const guessDelta = d - skillDelta - sgDelta;
+      const ruleId = roundMeta.id;
+      const sgDeltaNum =
+        Array.isArray(item.sgDeltasSnapshot) && item.sgDeltasSnapshot[seat - 1] != null
+          ? Number(item.sgDeltasSnapshot[seat - 1])
+          : sg.used === "Y"
+            ? sumSignedFromText(sg.usage)
+            : 0;
+      let guessOnly = Array.isArray(item.guessOnlyDeltas) ? Number(item.guessOnlyDeltas[seat - 1]) : NaN;
+      if (!Number.isFinite(guessOnly)) guessOnly = d - sgDeltaNum;
+      const skillTotal = d - guessOnly - sgDeltaNum;
+      const own = pointsFromOwnSkillEvent(seat, item);
+      const others = pointsFromOthersTargetingSeat(seat, item);
+      const passive = passiveSkillBits(item.reasons?.[seat - 1] || "");
+      const restSkill = skillTotal - own.pts - others.pts;
+      const forceSkillY = PER_ROUND_SKILL_ROLES.has(role);
+      const showSkillY = forceSkillY || sInfo.used;
+      const pickStr = forceSkillY ? (sInfo.picks || "—") : (sInfo.used ? sInfo.picks : "—");
+      const ownLine =
+        own.pts !== 0
+          ? `Own role: ${own.label || "ability"} — ${own.pts >= 0 ? "+" : ""}${Math.round(own.pts * 10) / 10} pts`
+          : forceSkillY && sInfo.used
+            ? `Own role: used`
+            : `Own role: not used`;
+      const othersPtsTotal = others.pts + restSkill;
+      const othersNotes = [
+        others.notes || "",
+        passive.length ? passive.join(", ") : ""
+      ].filter(Boolean).join("; ");
+      const othersLine =
+        othersNotes || Math.abs(othersPtsTotal) > 0.05
+          ? `Affected by others’ skills: Yes — ${othersNotes || "applied"} (${othersPtsTotal >= 0 ? "+" : ""}${Math.round(othersPtsTotal * 10) / 10} pts)`
+          : `Affected by others’ skills: No`;
+      const passiveLine = "";
       const guessResultText = !gSeat ? "No vote" : (gSeat === (item.holderId || 0) ? "Right guess" : "Wrong guess");
       rows.push(`
         <tr class="border-t border-zinc-700/70">
@@ -4239,8 +4537,8 @@ function showRoundDetailsModal(roundIndex) {
           <td class="py-2 px-2">
             ${gSeat ? `<button type="button" class="underline decoration-amber-400 hover:text-amber-200" onclick="revealRoleTooltip(${roundIndex}, ${gSeat}, 'guessed')">${gLabel}</button>` : `<span class="text-zinc-300">${gLabel}</span>`}
           </td>
-          <td class="py-2 px-2 text-center font-bold ${sInfo.used ? "text-emerald-300" : "text-zinc-400"}">${sInfo.used ? "Y" : "N"}</td>
-          <td class="py-2 px-2 text-[10px] text-zinc-300 skill-col">${sInfo.used ? sInfo.picks : "—"}</td>
+          <td class="py-2 px-2 text-center font-bold ${showSkillY ? "text-emerald-300" : "text-zinc-400"}">${showSkillY ? "Y" : "N"}</td>
+          <td class="py-2 px-2 text-[10px] text-zinc-300 skill-col">${pickStr}</td>
           <td class="py-2 px-2 text-center font-bold ${sg.used === "Y" ? "text-fuchsia-300" : "text-zinc-400"}">${sg.used}</td>
           <td class="py-2 px-2 text-[10px] text-zinc-300 sg-col">${sg.used === "Y" ? sg.usage : "—"}${sg.used === "Y" ? `<div class="text-[9px] text-zinc-500">claim: ${sg.claim}</div>` : ""}</td>
           <td class="py-2 px-2">
@@ -4248,26 +4546,32 @@ function showRoundDetailsModal(roundIndex) {
               onclick="togglePointCalc('${roundIndex}_${seat}')">Calc</button>
             <div id="calc_${roundIndex}_${seat}" class="hidden mt-2 text-[10px] leading-relaxed text-zinc-200">
               <div class="text-cyan-200 font-bold mb-1">Point calculation</div>
-              <div class="text-zinc-200 font-bold">1) Guess based</div>
-              <div class="text-zinc-300">• ${guessResultText}; points: ${guessDelta >= 0 ? "+" : ""}${Math.round(guessDelta * 10) / 10}</div>
-              <div class="text-zinc-300">• Rule ${ruleId}
+              <div class="text-zinc-200 font-bold">1) Guess-based</div>
+              <div class="text-zinc-300">• ${guessResultText}; points: ${guessOnly >= 0 ? "+" : ""}${Math.round(guessOnly * 10) / 10}</div>
+              <div class="text-zinc-300">• ${guessPointsNarrative(seat, item, roundMeta)}</div>
+              <div class="text-zinc-300">• Rule no:
                 <button type="button" class="ml-1 underline decoration-sky-400 hover:text-sky-200" onclick="showPointRulesModal(${ruleId})">open rule ${ruleId}</button>
               </div>
-              <div class="text-amber-300 font-bold">∑ (total) = ${guessDelta >= 0 ? "+" : ""}${Math.round(guessDelta * 10) / 10}</div>
+              <div class="text-amber-300 font-bold">∑ guess = ${guessOnly >= 0 ? "+" : ""}${Math.round(guessOnly * 10) / 10}</div>
 
-              <div class="mt-1 text-zinc-200 font-bold">2) Skill based</div>
-              <div class="text-zinc-300">• own skill: ${sInfo.used ? `Used (${sInfo.picks})` : "Not used"}</div>
-              <div class="text-zinc-300">• points: ${skillDelta >= 0 ? "+" : ""}${Math.round(skillDelta * 10) / 10}</div>
-              <div class="text-emerald-300 font-bold">∑ (total) = ${skillDelta >= 0 ? "+" : ""}${Math.round(skillDelta * 10) / 10}</div>
+              <div class="mt-1 text-zinc-200 font-bold">2) Skill-based</div>
+              <div class="text-zinc-300">• ${ownLine}</div>
+              <div class="text-zinc-300">• ${othersLine}</div>
+              ${passiveLine}
+              <div class="text-emerald-300 font-bold">∑ skill = ${skillTotal >= 0 ? "+" : ""}${Math.round(skillTotal * 10) / 10}</div>
 
               ${sg.used === "Y" ? `
-              <div class="mt-1 text-zinc-200 font-bold">3) SG card based</div>
-              <div class="text-zinc-300">• used: Yes (${sg.usage})</div>
-              <div class="text-zinc-300">• points: ${sgDelta >= 0 ? "+" : ""}${Math.round(sgDelta * 10) / 10}</div>
-              <div class="text-fuchsia-300 font-bold">∑ (total) = ${sgDelta >= 0 ? "+" : ""}${Math.round(sgDelta * 10) / 10}</div>` : ""}
+              <div class="mt-1 text-zinc-200 font-bold">3) SG card
+                <button type="button" class="ml-1 underline decoration-fuchsia-400 hover:text-fuchsia-200 text-[10px]" onclick="showPointRulesModal(5)">rule</button>
+              </div>
+              <div class="text-zinc-300">• Used: Yes — ${sg.usage}</div>
+              <div class="text-zinc-300">• Points: ${sgDeltaNum >= 0 ? "+" : ""}${Math.round(sgDeltaNum * 10) / 10}</div>
+              <div class="text-fuchsia-300 font-bold">∑ SG = ${sgDeltaNum >= 0 ? "+" : ""}${Math.round(sgDeltaNum * 10) / 10}</div>` : `
+              <div class="mt-1 text-zinc-200 font-bold">3) SG card</div>
+              <div class="text-zinc-300">• Used: No — 0 pts</div>`}
 
               <div class="mt-1 font-black ${d >= 0 ? "text-emerald-300" : "text-rose-300"}">
-                Total points = guess + skill + sg = ${d >= 0 ? "+" : ""}${Math.round(d * 10) / 10}
+                ⌂ Total = guess + skill + SG = ${d >= 0 ? "+" : ""}${Math.round(d * 10) / 10}
               </div>
             </div>
           </td>
@@ -4275,7 +4579,6 @@ function showRoundDetailsModal(roundIndex) {
         </tr>
       `);
     }
-    const anySkill = skillUsedFlags.some(Boolean);
     const anySg = sgUsedFlags.some(Boolean);
 
     box.innerHTML = `
@@ -4291,7 +4594,7 @@ function showRoundDetailsModal(roundIndex) {
               <th class="text-left py-2 px-1">players</th>
               <th class="text-left py-2 px-1">guess</th>
               <th class="text-center py-2 px-1">skill?</th>
-              ${anySkill ? `<th class="text-left py-2 px-1 skill-col">picks</th>` : ""}
+              <th class="text-left py-2 px-1 skill-col">picks</th>
               <th class="text-center py-2 px-1">sg?</th>
               ${anySg ? `<th class="text-left py-2 px-1 sg-col">sg use</th>` : ""}
               <th class="text-left py-2 px-1">point div</th>
@@ -4303,9 +4606,7 @@ function showRoundDetailsModal(roundIndex) {
           </tbody>
         </table>
       </div>
-      <div class="mt-3 text-[10px] text-zinc-400">
-        Tip: click a <span class="text-cyan-200 font-bold">player name</span> to reveal their role briefly; click a <span class="text-amber-200 font-bold">guessed name</span> to reveal that guessed player’s role briefly.
-      </div>
+      ${roundLightDarkTeamsHtml(item)}
       <div id="role-tooltip-popup" class="hidden fixed inset-0 z-[80] bg-black/70 flex items-center justify-center p-4">
         <div class="w-full max-w-md rounded-2xl bg-zinc-900 border border-cyan-400/30 p-4">
           <div class="flex items-center justify-between mb-2">
@@ -4316,7 +4617,6 @@ function showRoundDetailsModal(roundIndex) {
         </div>
       </div>
     `;
-    if (!anySkill) box.querySelectorAll(".skill-col").forEach((el) => el.remove());
     if (!anySg) box.querySelectorAll(".sg-col").forEach((el) => el.remove());
   };
 
@@ -4404,6 +4704,12 @@ function showPointRulesModal(focusRule = null) {
       title: "Rule 4 — 2+ correct and holder fails catch",
       body: "If at least 2 guessed holder and holder did not pick any of them, each correct guesser gets bonus +5; holder loses -5 for each correct guesser.",
       ex: `Random-Red\n*1-4(-10)\n2-1(+5, bonus +5)\n3-1(+5, bonus +5)\n4-3(0)`
+    },
+    {
+      id: 5,
+      title: "SG card — Special Guess (once per game)",
+      body: "Redemption: +20 to your score when used. Category Duel: pick a player and guess LIGHT or DARK for their role; ±15 between you and them depending on correctness. SG applies in the round you use it and adds to guess + skill totals.",
+      ex: `SG Redemption: +20 this round.\nSG Duel: you +15 / they −15 if correct, or the reverse if wrong.`
     }
   ];
   box.innerHTML = rules.map((r) => `
