@@ -60,12 +60,12 @@ const io = new Server(server, {
 
 const rooms = new Map();
 
-function normalizePlayerKey(playerKey) {
-  if (playerKey == null) return null;
-  const key = String(playerKey).trim();
-  if (!key) return null;
-  // Keep it compact; only alphanumerics/underscore for safety.
-  const clean = key.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24);
+function normalizePlayerKeyFromName(name) {
+  if (name == null) return null;
+  const raw = String(name).trim().toLowerCase();
+  if (!raw) return null;
+  // Stable key from name only (as requested).
+  const clean = raw.replace(/[^a-z0-9_]/g, "_").slice(0, 24);
   return clean || null;
 }
 
@@ -170,10 +170,11 @@ function buildAssignedRoles(targetPlayers) {
 }
 
 io.on("connection", (socket) => {
-  socket.on("create_room", ({ name, targetPlayers, playerKey }) => {
+  socket.on("create_room", ({ name, targetPlayers }) => {
     const code = createRoomCode();
     const room = getOrCreateRoom(code);
-    const key = normalizePlayerKey(playerKey) || socket.id.slice(-6);
+    const normalizedName = (name || "Player").trim().slice(0, 20) || "Player";
+    const key = normalizePlayerKeyFromName(normalizedName) || "player";
     room.hostPlayerKey = key;
     room.hostId = socket.id;
     room.targetPlayers = Math.max(4, Math.min(12, parseInt(targetPlayers, 10) || 4));
@@ -181,7 +182,7 @@ io.on("connection", (socket) => {
     room.players.push({
       playerKey: key,
       socketId: socket.id,
-      name: (name || "Player").trim().slice(0, 20) || "Player",
+      name: normalizedName,
       seatIndex,
       lastSeen: Date.now()
     });
@@ -189,23 +190,24 @@ io.on("connection", (socket) => {
     emitLobby(room);
   });
 
-  socket.on("join_room", ({ name, roomCode, playerKey }) => {
+  socket.on("join_room", ({ name, roomCode }) => {
     const code = (roomCode || "").toUpperCase();
     if (!rooms.has(code)) {
       socket.emit("room_error", { message: "Room not found." });
       return;
     }
     const room = rooms.get(code);
-    const key = normalizePlayerKey(playerKey);
+    const normalizedName = (name || "").trim().slice(0, 20);
+    const key = normalizePlayerKeyFromName(normalizedName);
     if (!key) {
-      socket.emit("room_error", { message: "Missing player key." });
+      socket.emit("room_error", { message: "Please enter a valid name." });
       return;
     }
 
     const existing = room.players.find((p) => p.playerKey === key);
     if (existing) {
       existing.socketId = socket.id;
-      existing.name = (name || existing.name).trim().slice(0, 20) || existing.name;
+      existing.name = normalizedName || existing.name;
       existing.lastSeen = Date.now();
       if (room.hostPlayerKey === key) room.hostId = socket.id;
       socket.join(code);
@@ -222,7 +224,7 @@ io.on("connection", (socket) => {
     room.players.push({
       playerKey: key,
       socketId: socket.id,
-      name: (name || "Player").trim().slice(0, 20) || "Player",
+      name: normalizedName || "Player",
       seatIndex,
       lastSeen: Date.now()
     });
