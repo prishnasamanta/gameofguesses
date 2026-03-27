@@ -589,6 +589,12 @@ SET 1 • ROUND 0 / ?
 
 <!-- TOAST -->
 <div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] bg-zinc-900/95 border border-cyan-500/30 text-cyan-100 text-xs px-4 py-3 rounded-2xl shadow-2xl max-w-[92vw]"></div>
+<div id="submit-wait-modal" class="hidden fixed inset-0 z-[75] bg-black/70 flex items-center justify-center p-4">
+  <div class="bg-zinc-900 border border-cyan-500/40 rounded-2xl p-4 w-full max-w-sm text-center">
+    <div class="text-cyan-300 font-bold text-sm mb-2">Waiting for Others</div>
+    <div id="submit-wait-text" class="text-zinc-100 text-xs">0/0 submitted</div>
+  </div>
+</div>
 
 <script>
 // ==================== STATE & CONFIG ====================
@@ -784,6 +790,28 @@ function showToast(msg, ms = 1400) {
   el.classList.remove("hidden");
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.add("hidden"), ms);
+}
+
+function showSubmitWaitModal(submitted, total) {
+  const m = $("submit-wait-modal");
+  const t = $("submit-wait-text");
+  if (t) t.textContent = `${submitted}/${total} submitted`;
+  if (m) m.classList.remove("hidden");
+}
+
+function hideSubmitWaitModal() {
+  const m = $("submit-wait-modal");
+  if (m) m.classList.add("hidden");
+}
+
+function showOnlineRoleActionPreview(roleName) {
+  const roleObj = roles.find((r) => r.role === roleName);
+  if (!roleObj) return;
+  openInformationRoleModal(
+    roleName,
+    `<p class="text-cyan-300 font-bold">Online role action is active for ${roleName}.</p>
+     <p class="text-zinc-300 text-xs mt-2">This ability is synchronized by multiplayer resolution.</p>`
+  );
 }
 
 function copyRoomUrl() {
@@ -1781,6 +1809,8 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
       if (myGuess !== undefined) {
         state.playerGuess = myGuess;
         if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
+        const submitted = Object.keys(state.roundGuesses || {}).length;
+        showSubmitWaitModal(submitted, state.numPlayers);
       } else {
         // Info-role popups for UX.
         const myRole = state.assignedRoles[state.myId - 1];
@@ -1802,6 +1832,11 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
           state.lastRoundPhaseKey = phaseKey;
           return;
         }
+        if (actionKey && actionKey !== "merchant" && actionKey !== "reflector") {
+          showOnlineRoleActionPreview(myRole);
+          state.lastRoundPhaseKey = phaseKey;
+          return;
+        }
 
         setTimeout(openGuessModal, 250);
       }
@@ -1816,6 +1851,9 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
       if (state._lastSubmittedToastMsg !== msg) {
         state._lastSubmittedToastMsg = msg;
         showToast(msg, 1200);
+      }
+      if (state.roundGuesses[state.myId] !== undefined) {
+        showSubmitWaitModal(submittedCount, state.numPlayers);
       }
     }
 
@@ -1910,6 +1948,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
   }
 
   if (roundState.phase === "discussion") {
+    hideSubmitWaitModal();
     if (startBtn) {
       startBtn.disabled = true;
       startBtn.classList.add("opacity-60");
@@ -1934,6 +1973,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
   }
 
   if (roundState.phase === "next_ready") {
+    hideSubmitWaitModal();
     state.chatPhaseActive = false;
     if (startBtn) {
       startBtn.disabled = !state.isHost;
@@ -3236,6 +3276,7 @@ function submitPlayerGuess() {
 
     if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
     const submitted = Object.keys(state.roundGuesses || {}).length;
+    showSubmitWaitModal(submitted, state.numPlayers);
     showToast(`Waiting for others… (${submitted}/${state.numPlayers} submitted)`, 1800);
     return;
   }
@@ -3258,6 +3299,8 @@ function noVote() {
     update(ref(window.db), updates);
 
     if (dom.status) dom.status.innerHTML = `No vote submitted. Waiting for other guesses...`;
+    const submitted = Object.keys(state.roundGuesses || {}).length;
+    showSubmitWaitModal(submitted, state.numPlayers);
     return;
   }
 
