@@ -813,7 +813,9 @@ function isSeatDisconnectedInOnlineRound(seatId) {
   if (!key) return false;
   const p = data?.players?.[key];
   if (!p) return false;
-  return !p.socketId;
+  // Treat a seat as disconnected only when explicitly marked null.
+  // Missing socketId field should not be auto-treated as disconnected.
+  return p.socketId === null;
 }
 
 function showOnlineRoleActionPreview(roleName) {
@@ -933,37 +935,30 @@ function startChatPhaseAfterRound() {
     const startBtn = $("start-round-btn");
     startBtn.disabled = false;
     startBtn.classList.remove("opacity-60");
-    const t = $("chat-timer-inline");
-    if (t) t.classList.add("hidden");
     state.chatPhaseActive = false;
     renderCircle();
     return;
   }
 
   const defaultDiscussionSeconds = 240;
-  let timeLeft = defaultDiscussionSeconds;
-  const endsAtMs = state.roundState?.discussionEndsAtMs;
-  if (typeof endsAtMs === "number") {
-    timeLeft = Math.ceil((endsAtMs - Date.now()) / 1000);
-  }
-  if (!Number.isFinite(timeLeft) || timeLeft < 0) timeLeft = 0;
+  const endsAtMs = typeof state.roundState?.discussionEndsAtMs === "number"
+    ? state.roundState.discussionEndsAtMs
+    : (Date.now() + defaultDiscussionSeconds * 1000);
   state.chatPhaseActive = true;
   renderCircle();
   const startBtn = $("start-round-btn");
   startBtn.disabled = true;
   startBtn.classList.add("opacity-60");
-  const timerInline = $("chat-timer-inline");
-  if (timerInline) timerInline.classList.remove("hidden");
 
   const tick = () => {
+    const timeLeft = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000));
     const mm = String(Math.floor(timeLeft / 60)).padStart(2, "0");
     const ss = String(timeLeft % 60).padStart(2, "0");
-    if (timerInline) timerInline.textContent = `Chat timer: ${mm}:${ss}`;
-    timeLeft -= 1;
-    if (timeLeft < 0) {
+    const chatTimerEl = $("main-chat-timer-inline");
+    if (chatTimerEl) chatTimerEl.textContent = `Discussion timer: ${mm}:${ss}`;
+    if (timeLeft <= 0) {
       startBtn.disabled = false;
       startBtn.classList.remove("opacity-60");
-      if (timerInline) timerInline.classList.add("hidden");
       state.chatPhaseActive = false;
       renderCircle();
 
@@ -988,8 +983,6 @@ function endDiscussionNow(remote = false) {
     state.chatTimer = null;
   }
   state.chatPhaseActive = false;
-  const timerInline = $("chat-timer-inline");
-  if (timerInline) timerInline.classList.add("hidden");
   const startBtn = $("start-round-btn");
   if (!state.onlineMode || state.isHost || remote) {
     startBtn.disabled = false;
@@ -1305,7 +1298,7 @@ function createRoom() {
   ensureSocket();
   const name = ($("mp-name-input").value || "").trim();
   if (!name) {
-    alert("Please enter your name");
+    showToast("Please enter your name", 1800);
     return;
   }
   ensureLocalIdentity();
@@ -1324,11 +1317,11 @@ function joinRoom() {
   const name = (($("mp-name-input-join")?.value || $("mp-name-input")?.value) || "").trim();
   const code = ($("mp-room-input").value || "").trim().toUpperCase();
   if (!name) {
-    alert("Please enter your name");
+    showToast("Please enter your name", 1800);
     return;
   }
   if (!code) {
-    alert("Please enter room code");
+    showToast("Please enter room code", 1800);
     return;
   }
   ensureLocalIdentity();
@@ -1362,7 +1355,7 @@ function ensureSocket() {
   }
   state.socket = io();
   state.socket.on("room_error", ({ message }) => {
-    alert(message || "Room error");
+    showToast(message || "Room error", 2200);
   });
   state.socket.on("lobby_update", (payload) => {
     state.roomCode = payload.roomCode;
@@ -1546,7 +1539,7 @@ function showMyRoleInfo() {
   const myRole = state.assignedRoles[state.myId - 1];
   const roleEntry = roles.find((r) => r.role === myRole);
   if (!myRole || !roleEntry) return;
-  alert(`${roleEntry.color} • ${roleEntry.role}\n\n${roleEntry.desc}`);
+  openInformationRoleModal(`${roleEntry.color} • ${roleEntry.role}`, `<p class="text-zinc-100 text-sm">${escapeHtml(roleEntry.desc)}</p>`);
 }
 
 function escapeHtml(s) {
@@ -2034,21 +2027,12 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
       startBtn.disabled = true;
       startBtn.classList.add("opacity-60");
     }
-    // Everyone should start the shared timer after phase changes/reconnect.
-    // But if the host just resolved via calculateRound(), it will start the timer itself.
+    // Everyone should start the same shared timer from Firebase timestamp.
     if (phaseKey !== lastKey) {
-      const roundKey = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}`;
-      if (!(state.isHost && state.roundResolvedKey === roundKey)) {
-        hide(dom.modal);
-        state.chatPhaseActive = true;
-        if (dom.status) {
-          dom.status.innerHTML = `Round ${state.currentRound} resolved. Discussion started.`;
-        }
-        state.lastRoundPhaseKey = phaseKey;
-        startChatPhaseAfterRound();
-      } else {
-        state.lastRoundPhaseKey = phaseKey;
-      }
+      hide(dom.modal);
+      state.chatPhaseActive = true;
+      state.lastRoundPhaseKey = phaseKey;
+      startChatPhaseAfterRound();
     }
     return;
   }
@@ -2075,6 +2059,7 @@ function renderCircle() {
       <div class="absolute inset-0 flex items-center justify-center">
         <div class="w-[92%] max-w-2xl bg-zinc-900/80 border border-cyan-400/40 rounded-3xl p-4">
           <div class="text-cyan-300 font-bold mb-2 text-center">Room Chat</div>
+          <div id="main-chat-timer-inline" class="text-[11px] text-amber-300 font-bold text-center mb-2">Discussion timer: 04:00</div>
           <div id="main-chat-log-inline" class="h-64 overflow-auto bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 text-sm mb-3"></div>
           <div class="chat-input-row">
             <input id="main-chat-input-inline" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type message..." class="bg-zinc-900 border border-zinc-600 rounded-xl px-3 py-2" />
@@ -2085,7 +2070,6 @@ function renderCircle() {
       </div>
     `;
     mirrorChatToInline();
-    if (dom.status) dom.status.classList.add("hidden");
     return;
   }
 
@@ -2099,10 +2083,7 @@ function renderCircle() {
   `;
   const mainChat = $("multiplayer-chat-space");
   if (mainChat) mainChat.classList.add("hidden");
-  if (dom.status) {
-    if (state.onlineMode) dom.status.classList.add("hidden");
-    else dom.status.classList.remove("hidden");
-  }
+  if (dom.status) dom.status.classList.remove("hidden");
   state.seatPositionsById = {};
 
   const size = dom.circle.clientWidth || 480;
@@ -2995,8 +2976,11 @@ function showRoleDetailPopup(roleName) {
   const colorName = roleToColor[roleName];
   const roleInfo = roleByColor[colorName];
   if (!roleInfo) return;
-  
-  alert(`${roleName}\n\nAbility: ${roleInfo.desc}\n\nUsage: ${roleInfo.usage}`);
+  openInformationRoleModal(
+    roleName,
+    `<p class="text-zinc-100 text-sm">${escapeHtml(roleInfo.desc || "-")}</p>
+     <p class="text-amber-300 text-xs mt-2">Usage: ${escapeHtml(roleInfo.usage || "-")}</p>`
+  );
 }
 
 function openEmpathWaitingModal() {
@@ -3258,6 +3242,10 @@ function openGuessModal() {
 
   const instr = $("guess-instruction");
   if (instr) instr.textContent = "Click a seat to select guess, then press Submit Guess.";
+  const lockGold = myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2;
+  if (lockGold && instr) {
+    instr.textContent = `High Roller locked picks: P${state.highRollerGuesses[0]} and P${state.highRollerGuesses[1]}. Submit to continue.`;
+  }
   const skill = $("guess-skill-info");
   if (skill) {
     const myRole = state.assignedRoles[state.myId - 1];
@@ -3279,6 +3267,9 @@ function renderMiniCircle() {
   const size = dom.modalCircle.clientWidth || 288;
   const radius = (size / 2) * 0.72;
   const cx = size / 2, cy = size / 2;
+  const myRole = state.assignedRoles[state.myId - 1];
+  const lockGold = myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2;
+  const lockedSet = new Set(lockGold ? state.highRollerGuesses : []);
   for (let i = 0; i < state.numPlayers; i++) {
     const seatId = i + 1;
     const angle = (i * (360 / state.numPlayers)) * (Math.PI / 180);
@@ -3309,11 +3300,12 @@ function renderMiniCircle() {
       seat.style.color = getContrastingText(myHex);
       seat.style.border = "2px solid #facc15";
     }
-    if (state.playerGuess === seatId) {
+    if (state.playerGuess === seatId || lockedSet.has(seatId)) {
       seat.style.border = "3px solid #22d3ee";
     }
 
     seat.onclick = () => {
+      if (lockGold) return;
       state.playerGuess = seatId;
       renderMiniCircle();
     };
@@ -3423,12 +3415,7 @@ function skipGuess() {
   const myRole = state.assignedRoles[state.myId - 1];
   if (myRole !== "The High Roller") return;
   if (state.highRollerUsed) return;
-  state.highRollerUsed = true;
-  const p2 = parseInt(prompt(`High Roller: enter second guess player (1-${state.numPlayers})`), 10);
-  if (!p2 || p2 < 1 || p2 > state.numPlayers) return;
-  state.highRollerGuesses = [state.playerGuess, p2].filter(Boolean);
-  const instr = $("guess-instruction");
-  if (instr) instr.textContent = `High Roller active: guesses set to P${state.highRollerGuesses.join(" & P")}.`;
+  showToast("Use High Roller from Role Action table to choose locked 2 picks.", 2400);
 }
 
 function useSpecialGuessCard() {
@@ -3894,7 +3881,9 @@ function calculateRound() {
   }
 
   if (state.chatTimer) clearTimeout(state.chatTimer);
-  startChatPhaseAfterRound();
+  if (!state.onlineMode) {
+    startChatPhaseAfterRound();
+  }
 
   if (state.isHost && window.db && window.rtdb && state.roomCode && state.onlineMode) {
     const { ref, update } = window.rtdb;
@@ -4375,7 +4364,16 @@ function syncRoleResultVisibility() {
 // Modal utils
 function showFullRules() { /* ... */ }
 function hideFullRules() { /* ... */ }
-function resetGame() { if (confirm("Reset everything?")) location.reload(); }
+function resetGame() {
+  if (!state._confirmResetArmed) {
+    state._confirmResetArmed = true;
+    showToast("Press RESET GAME again to confirm.", 1800);
+    setTimeout(() => { state._confirmResetArmed = false; }, 2200);
+    return;
+  }
+  state._confirmResetArmed = false;
+  location.reload();
+}
 
 // Initialize game
 window.onload = () => {
