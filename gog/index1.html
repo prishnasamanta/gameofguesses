@@ -653,6 +653,7 @@ const state = {
   // Online-only round synchronization (Firebase-driven).
   roundState: null, // { phase, set, round, announcedColor, announcedRole, holderId, discussionEndsAtMs }
   roundGuesses: {}, // { [seatIndex:number]: guessedSeatIndex:number|null }
+  submittedGuessThisRound: false,
   lastRoundPhaseKey: "",
   roundResolvedKey: "",
   playerNames: [],
@@ -802,6 +803,17 @@ function showSubmitWaitModal(submitted, total) {
 function hideSubmitWaitModal() {
   const m = $("submit-wait-modal");
   if (m) m.classList.add("hidden");
+}
+
+function isSeatDisconnectedInOnlineRound(seatId) {
+  if (!state.onlineMode) return false;
+  const data = window._lastRoomData || {};
+  const keysInSeat = state.playerOrderPlayerKeys || data?.match?.playerKeysInSeat || [];
+  const key = keysInSeat[seatId - 1];
+  if (!key) return false;
+  const p = data?.players?.[key];
+  if (!p) return false;
+  return !p.socketId;
 }
 
 function showOnlineRoleActionPreview(roleName) {
@@ -1778,6 +1790,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
   if (roundState.phase === "guessing") {
     state.roundInProgress = true;
     state.chatPhaseActive = false;
+    if (phaseKey !== lastKey) state.submittedGuessThisRound = false;
     if (dom.status) {
       state.announcedColor = roundState.announcedColor || state.announcedColor;
       state.announcedRole = roundState.announcedRole || state.announcedRole;
@@ -1806,7 +1819,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
     if (phaseKey !== lastKey) {
       hide(dom.modal);
       const myGuess = state.roundGuesses[state.myId];
-      if (myGuess !== undefined) {
+      if (myGuess !== undefined || state.submittedGuessThisRound) {
         state.playerGuess = myGuess;
         if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
         const submitted = Object.keys(state.roundGuesses || {}).length;
@@ -1822,18 +1835,8 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
           state.lastRoundPhaseKey = phaseKey;
           return;
         }
-        if (actionKey === "illuminator") {
-          const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
-          const right = (state.myId % state.numPlayers) + 1;
-          const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
-          const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
-          const same = leftCat === rightCat;
-          openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p>`);
-          state.lastRoundPhaseKey = phaseKey;
-          return;
-        }
-        if (actionKey && actionKey !== "merchant" && actionKey !== "reflector") {
-          showOnlineRoleActionPreview(myRole);
+        if (["oracle","corrupter","illuminator","hunter","siphon","soulswapper","executioner","highroller","alchemist"].includes(actionKey)) {
+          openRoleActionModal(myRole);
           state.lastRoundPhaseKey = phaseKey;
           return;
         }
@@ -1852,7 +1855,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
         state._lastSubmittedToastMsg = msg;
         showToast(msg, 1200);
       }
-      if (state.roundGuesses[state.myId] !== undefined) {
+      if (state.roundGuesses[state.myId] !== undefined || state.submittedGuessThisRound) {
         showSubmitWaitModal(submittedCount, state.numPlayers);
       }
     }
@@ -1881,7 +1884,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
             break;
           }
         }
-        // If not all submitted by guess deadline, fill missing guesses with deterministic AI.
+        // If not all submitted by guess deadline, fill only disconnected seats with deterministic AI.
         const guessEndsAtMs = typeof roundState.guessEndsAtMs === "number" ? roundState.guessEndsAtMs : null;
         const pastDeadline = guessEndsAtMs != null && Date.now() > guessEndsAtMs;
         if (!allSubmitted && pastDeadline && window.OnlinePointCalculator && window.db && window.rtdb && state.roomCode) {
@@ -1889,14 +1892,17 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
           const updates = {};
           for (let seat = 1; seat <= state.numPlayers; seat++) {
             if (state.roundGuesses[seat] !== undefined) continue;
+            if (!isSeatDisconnectedInOnlineRound(seat)) continue;
             // AI guess uses deterministic hash (seat+round) so refresh won't change it.
             const aiGuess = 1 + (window.OnlinePointCalculator.computeOnlineRoleEffects
               ? (Math.abs((seat * 1009 + roundNum * 917 + setNum * 251) % state.numPlayers))
               : 0);
             updates[`rooms/${state.roomCode}/roundGuesses/${seat}`] = aiGuess;
           }
-          updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
-          update(ref(window.db), updates);
+          if (Object.keys(updates).length > 0) {
+            updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
+            update(ref(window.db), updates);
+          }
           // Wait for the next Firebase update to re-check allSubmitted.
           return;
         }
@@ -1955,6 +1961,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
 
   if (roundState.phase === "results") {
     hideSubmitWaitModal();
+    state.submittedGuessThisRound = false;
     state.roundInProgress = true;
     state.chatPhaseActive = false;
 
@@ -1980,13 +1987,13 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
     // Render totals grid (same visual as computer play).
     if (dom.status) {
       const cols = Math.ceil(state.numPlayers / 2);
-      const sizeCls = state.numPlayers <= 6 ? "text-xl md:text-2xl" : state.numPlayers <= 9 ? "text-lg md:text-xl" : "text-base md:text-lg";
+      const sizeCls = state.numPlayers <= 6 ? "text-base sm:text-xl md:text-2xl" : state.numPlayers <= 9 ? "text-sm sm:text-lg md:text-xl" : "text-xs sm:text-base md:text-lg";
       let summaryHtml = "";
       for (let p = 1; p <= state.numPlayers; p++) {
         const totalNow = Math.round((Number(state.playerScores[p - 1]) || 0) * 10) / 10;
         summaryHtml += `
-          <div class="px-3 py-3 rounded-xl border border-cyan-500/20 bg-zinc-800/70 text-center">
-            <div class="${sizeCls} font-black ${totalNow >= 0 ? "text-emerald-300" : "text-rose-300"}">${totalNow}</div>
+          <div class="min-w-0 px-2 sm:px-3 py-2 sm:py-3 rounded-xl border border-cyan-500/20 bg-zinc-800/70 text-center">
+            <div class="${sizeCls} leading-tight font-black ${totalNow >= 0 ? "text-emerald-300" : "text-rose-300"}">${totalNow}</div>
           </div>
         `;
       }
@@ -2022,6 +2029,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
 
   if (roundState.phase === "discussion") {
     hideSubmitWaitModal();
+    state.submittedGuessThisRound = false;
     if (startBtn) {
       startBtn.disabled = true;
       startBtn.classList.add("opacity-60");
@@ -2047,6 +2055,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
 
   if (roundState.phase === "next_ready") {
     hideSubmitWaitModal();
+    state.submittedGuessThisRound = false;
     state.chatPhaseActive = false;
     if (startBtn) {
       startBtn.disabled = !state.isHost;
@@ -2518,28 +2527,13 @@ function startRound() {
 
   if (state.activeAbilityRole) {
     const actionKey = roleActionByRoleName[state.activeAbilityRole];
-    if (["oracle","corrupter","hunter","siphon","soulswapper","executioner","highroller","alchemist"].includes(actionKey)) {
-      // In multiplayer, keep round resolution deterministic (host will resolve using submitted guesses).
-      // Let interactive role actions remain in single-player only for now.
-      if (!state.onlineMode) {
-        openRoleActionModal(state.activeAbilityRole);
-        return;
-      }
-      // Multiplayer: skip interactive role UI; host will resolve using submitted guesses.
-      setTimeout(openGuessModal, 1100);
+    if (["oracle","corrupter","illuminator","hunter","siphon","soulswapper","executioner","highroller","alchemist"].includes(actionKey)) {
+      openRoleActionModal(state.activeAbilityRole);
       return;
     }
     if (actionKey === "empath") {
       state.empathPeekTarget = null;
       openEmpathWaitingModal();
-      return;
-    } else if (actionKey === "illuminator") {
-      const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
-      const right = (state.myId % state.numPlayers) + 1;
-      const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
-      const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
-      const same = leftCat === rightCat;
-      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p>`);
       return;
     } else if (actionKey === "siphon") {
       const darkPlayers = [];
@@ -2615,21 +2609,13 @@ function startRoundFromNetwork() {
   state.activeAbilityRole = myRole;
   if (state.activeAbilityRole) {
     const actionKey = roleActionByRoleName[state.activeAbilityRole];
-    if (["oracle","corrupter","hunter","siphon","soulswapper","executioner"].includes(actionKey)) {
+    if (["oracle","corrupter","illuminator","hunter","siphon","soulswapper","executioner","highroller","alchemist"].includes(actionKey)) {
       openRoleActionModal(state.activeAbilityRole);
       return;
     }
     if (actionKey === "empath") {
       state.empathPeekTarget = null;
       openEmpathWaitingModal();
-      return;
-    } else if (actionKey === "illuminator") {
-      const left = ((state.myId - 2 + state.numPlayers) % state.numPlayers) + 1;
-      const right = (state.myId % state.numPlayers) + 1;
-      const leftCat = colorCategory[roleToColor[state.assignedRoles[left - 1]]] || "DARK";
-      const rightCat = colorCategory[roleToColor[state.assignedRoles[right - 1]]] || "DARK";
-      const same = leftCat === rightCat;
-      openInformationRoleModal("The Illuminator", `<p class="text-lime-300 font-bold text-base">Neighbors same category? <b>${same ? "YES" : "NO"}</b></p>`);
       return;
     }
   }
@@ -2783,6 +2769,15 @@ function openRoleActionModal(roleName) {
       if (p === state.myId) dmg = 15;
       state.playerScores[p - 1] -= dmg;
       dom.roleModalResult.textContent = `P${p} is ${cat}. Penalty -${dmg}.`;
+      closeRoleModalThenOpenGuess();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
+  } else if (actionKey === "illuminator") {
+    state.roleRequiredCount = 1;
+    state.rolePendingApply = (sel) => {
+      const p = sel[0];
+      const cat = colorCategory[roleToColor[state.assignedRoles[p - 1]]] || "DARK";
+      dom.roleModalResult.textContent = `P${p} is in ${cat} category.`;
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
@@ -3346,6 +3341,7 @@ function submitPlayerGuess() {
     updates[`rooms/${state.roomCode}/roundGuesses/${state.myId}`] = guess;
     updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
     update(ref(window.db), updates);
+    state.submittedGuessThisRound = true;
 
     if (dom.status) dom.status.innerHTML = `Submitted. Waiting for other guesses...`;
     const submitted = Object.keys(state.roundGuesses || {}).length;
@@ -3370,6 +3366,7 @@ function noVote() {
     updates[`rooms/${state.roomCode}/roundGuesses/${state.myId}`] = 0;
     updates[`rooms/${state.roomCode}/roundGuessesUpdatedAt`] = Date.now();
     update(ref(window.db), updates);
+    state.submittedGuessThisRound = true;
 
     if (dom.status) dom.status.innerHTML = `No vote submitted. Waiting for other guesses...`;
     const submitted = Object.keys(state.roundGuesses || {}).length;
@@ -3840,12 +3837,12 @@ function calculateRound() {
 
   let summaryHtml = "";
   const cols = Math.ceil(state.numPlayers / 2);
-  const sizeCls = state.numPlayers <= 6 ? "text-xl md:text-2xl" : state.numPlayers <= 9 ? "text-lg md:text-xl" : "text-base md:text-lg";
+  const sizeCls = state.numPlayers <= 6 ? "text-base sm:text-xl md:text-2xl" : state.numPlayers <= 9 ? "text-sm sm:text-lg md:text-xl" : "text-xs sm:text-base md:text-lg";
   for (let p = 1; p <= state.numPlayers; p++) {
     const totalNow = Math.round(state.playerScores[p - 1] * 10) / 10;
     summaryHtml += `
-      <div class="px-3 py-3 rounded-xl border border-cyan-500/20 bg-zinc-800/70 text-center">
-        <div class="${sizeCls} font-black ${totalNow >= 0 ? "text-emerald-300" : "text-rose-300"}">${totalNow}</div>
+      <div class="min-w-0 px-2 sm:px-3 py-2 sm:py-3 rounded-xl border border-cyan-500/20 bg-zinc-800/70 text-center">
+        <div class="${sizeCls} leading-tight font-black ${totalNow >= 0 ? "text-emerald-300" : "text-rose-300"}">${totalNow}</div>
       </div>
     `;
   }
