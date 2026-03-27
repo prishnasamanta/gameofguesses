@@ -830,16 +830,10 @@ function setRoomCodeInUrl(roomCode) {
 }
 
 function ensureLocalIdentity() {
-  // Use per-tab identity so multiple tabs can join as different players.
-  // sessionStorage survives refresh in the same tab.
-  const keyName = "gog_player_key";
+  // Stable identity is derived from player name (name + seat model).
   const nameName = "gog_player_name";
-  let playerKey = sessionStorage.getItem(keyName) || "";
-  if (!playerKey) {
-    playerKey = `p_${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
-    sessionStorage.setItem(keyName, playerKey);
-  }
   const playerName = sessionStorage.getItem(nameName) || "";
+  const playerKey = String(playerName || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 24);
   state.playerKey = playerKey;
   state.myName = playerName;
   return { playerKey, playerName };
@@ -850,6 +844,7 @@ function storePlayerName(name) {
   if (!trimmed) return;
   sessionStorage.setItem("gog_player_name", trimmed);
   state.myName = trimmed;
+  state.playerKey = trimmed.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 24);
 }
 
 function upsertPresence() {
@@ -1722,14 +1717,7 @@ function listenToFirebaseRoom(roomCode) {
       renderAllChatLogsFromMessages(data.messages);
     }
 
-    if (data.presence) {
-      state.presenceByPlayerKey = data.presence || {};
-    }
-
-    // Start presence heartbeat once we know we are in a room.
-    if (state.onlineMode && state.roomCode) {
-      startPresenceHeartbeat();
-    }
+    // Presence tracking intentionally disabled to avoid refresh churn.
 
     syncMyScore();
     if (typeof updateRoundInfo === "function" && dom.roundInfo) updateRoundInfo();
@@ -2604,6 +2592,10 @@ function openInformationRoleModal(roleName, infoHtml) {
 }
 
 function openRoleActionModal(roleName) {
+  if (roleName === "The Empath") {
+    openEmpathWaitingModal();
+    return;
+  }
   const roleObj = roles.find((r) => r.role === roleName);
   const colorName = roleToColor[roleName];
   const abilityMap = {
@@ -3841,7 +3833,7 @@ function calculateRound() {
       guesses: lastEntry ? [...(lastEntry.guesses || [])] : [],
       reasons: lastEntry ? [...(lastEntry.reasons || [])] : [],
       roleEvents: lastEntry ? (lastEntry.roleEvents || null) : null,
-      presence: state.presenceByPlayerKey || {}
+      presence: {}
     };
     updates[`rooms/${code}/roundHistory`] = state.roundHistory;
     update(ref(window.db), updates);
@@ -4031,55 +4023,69 @@ function showRoundDetailsModal(roundIndex) {
       return { used: "Y", usage: String(sg.type || "used"), claim: sg.claim ?? "—" };
     };
 
+    const skillUsedFlags = [];
+    const sgUsedFlags = [];
     const rows = [];
     for (let seat = 1; seat <= (item.roles?.length || state.numPlayers || 0); seat++) {
       const name = guessName(seat);
       const sInfo = skillInfo(seat);
       const sg = sgInfo(seat);
+      skillUsedFlags.push(!!sInfo.used);
+      sgUsedFlags.push(sg.used === "Y");
       const gSeat = guessSeat(seat);
       const gLabel = gSeat ? guessName(gSeat) : "No vote";
       const role = roleName(seat);
+      const roleHex = roleColorMap[role] || "#334155";
+      const roleText = getContrastingText(roleHex);
       const d = delta(seat);
       const t = total(seat);
       const ruleId = detectRuleId(item.reasons?.[seat - 1] || "");
+      const guessNote = !gSeat
+        ? "No vote."
+        : (gSeat === (item.holderId || 0) ? `Guessed holder correctly (P${gSeat}).` : `Guessed P${gSeat} (not holder).`);
+      const sgDelta = sg.used === "Y" && sg.usage.includes("+") ? Number((sg.usage.match(/\+(\d+)/) || [])[1] || 0) : (sg.used === "Y" && sg.usage.includes("Duel") ? Number((sg.usage.match(/[-+]\d+/) || [])[0] || 0) : 0);
       rows.push(`
         <tr class="border-t border-zinc-700/70">
-          <td class="py-2 px-2">${mkNameBtn(seat, name, "text-cyan-200 font-bold")}</td>
           <td class="py-2 px-2">
-            <button type="button" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-[10px] font-bold"
-              onclick="revealRoleTooltip(${roundIndex}, ${seat}, 'role')">Tap</button>
+            <button type="button"
+              onclick="revealRoleTooltip(${roundIndex}, ${seat}, 'self')"
+              class="px-2 py-1 rounded-lg border text-[10px] font-bold"
+              style="background:${roleHex}; color:${roleText}; border-color:rgba(255,255,255,0.2)">
+              ${name}
+            </button>
           </td>
           <td class="py-2 px-2">
             ${gSeat ? `<button type="button" class="underline decoration-amber-400 hover:text-amber-200" onclick="revealRoleTooltip(${roundIndex}, ${gSeat}, 'guessed')">${gLabel}</button>` : `<span class="text-zinc-300">${gLabel}</span>`}
           </td>
           <td class="py-2 px-2 text-center font-bold ${sInfo.used ? "text-emerald-300" : "text-zinc-400"}">${sInfo.used ? "Y" : "N"}</td>
-          <td class="py-2 px-2 text-[10px] text-zinc-300">${sInfo.used ? sInfo.picks : "—"}</td>
+          <td class="py-2 px-2 text-[10px] text-zinc-300 skill-col">${sInfo.used ? sInfo.picks : "—"}</td>
           <td class="py-2 px-2 text-center font-bold ${sg.used === "Y" ? "text-fuchsia-300" : "text-zinc-400"}">${sg.used}</td>
-          <td class="py-2 px-2 text-[10px] text-zinc-300">${sg.used === "Y" ? sg.usage : "—"}<div class="text-[9px] text-zinc-500">claim: ${sg.claim}</div></td>
+          <td class="py-2 px-2 text-[10px] text-zinc-300 sg-col">${sg.used === "Y" ? sg.usage : "—"}${sg.used === "Y" ? `<div class="text-[9px] text-zinc-500">claim: ${sg.claim}</div>` : ""}</td>
           <td class="py-2 px-2">
             <button type="button" class="px-2 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-[10px] font-bold"
               onclick="togglePointCalc('${roundIndex}_${seat}')">Calc</button>
             <div id="calc_${roundIndex}_${seat}" class="hidden mt-2 text-[10px] leading-relaxed text-zinc-200">
               <div class="text-cyan-200 font-bold mb-1">Point calculation</div>
-              <div class="text-zinc-300"><span class="text-amber-200">• Guess-based:</span> ${(item.reasons?.[seat - 1] || "").trim() || "Not logged."}</div>
-              <div class="text-zinc-300"><span class="text-emerald-200">• Skill-based:</span> ${sInfo.used ? `${role}: pick ${sInfo.picks}` : "No skill used."}</div>
-              <div class="text-zinc-300"><span class="text-fuchsia-200">• SG-based:</span> ${sg.used === "Y" ? sg.usage : "No SG used."}</div>
+              <div class="text-zinc-300"><span class="text-amber-200">• Guess-based:</span> ${guessNote} Rule ${ruleId}${d > 0 ? " (+)" : d < 0 ? " (-)" : " (0)"}.</div>
+              <div class="text-zinc-300"><span class="text-emerald-200">• Skill-based:</span> ${sInfo.used ? `${role} used (${sInfo.picks}).` : "No skill used by/for this player."}</div>
+              <div class="text-zinc-300"><span class="text-fuchsia-200">• SG-based:</span> ${sg.used === "Y" ? `${sg.usage} (${sgDelta >= 0 ? "+" : ""}${sgDelta})` : "No SG used."}</div>
               <div class="text-zinc-300 mt-1"><span class="text-sky-200">• Base rule:</span> Rule ${ruleId} applied
                 <button type="button" class="ml-1 underline decoration-sky-400 hover:text-sky-200" onclick="showPointRulesModal(${ruleId})">open rule ${ruleId}</button>
               </div>
-              <div class="mt-1 font-bold ${d >= 0 ? "text-emerald-300" : "text-rose-300"}">Δ ${d >= 0 ? "+" : ""}${Math.round(d * 10) / 10}</div>
+              <div class="mt-1 font-bold ${d >= 0 ? "text-emerald-300" : "text-rose-300"}">Total from all divisions: ${d >= 0 ? "+" : ""}${Math.round(d * 10) / 10}</div>
             </div>
           </td>
           <td class="py-2 px-2 font-black ${t >= 0 ? "text-emerald-300" : "text-rose-300"}">${Math.round(t * 10) / 10}</td>
         </tr>
       `);
     }
+    const anySkill = skillUsedFlags.some(Boolean);
+    const anySg = sgUsedFlags.some(Boolean);
 
     box.innerHTML = `
       <div class="mb-3">
         <div class="text-[10px] text-zinc-400">Set ${item.set ?? "?"} • Round ${item.round ?? "?"}</div>
         <div class="text-lg font-bold text-amber-300">Announced: ${announced} <span class="text-zinc-300 font-normal">(${holderName})</span></div>
-        <div id="role-tooltip" class="hidden mt-2 px-3 py-2 rounded-2xl bg-zinc-800/80 border border-cyan-400/30 text-[10px] text-zinc-100"></div>
       </div>
 
       <div class="overflow-auto border border-zinc-700 rounded-2xl">
@@ -4087,12 +4093,11 @@ function showRoundDetailsModal(roundIndex) {
           <thead class="bg-zinc-800/80 text-zinc-100">
             <tr>
               <th class="text-left py-2 px-1">players</th>
-              <th class="text-left py-2 px-1">role</th>
               <th class="text-left py-2 px-1">guess</th>
               <th class="text-center py-2 px-1">skill?</th>
-              <th class="text-left py-2 px-1">picks</th>
+              ${anySkill ? `<th class="text-left py-2 px-1 skill-col">picks</th>` : ""}
               <th class="text-center py-2 px-1">sg?</th>
-              <th class="text-left py-2 px-1">sg use</th>
+              ${anySg ? `<th class="text-left py-2 px-1 sg-col">sg use</th>` : ""}
               <th class="text-left py-2 px-1">point div</th>
               <th class="text-left py-2 px-1">total</th>
             </tr>
@@ -4105,7 +4110,18 @@ function showRoundDetailsModal(roundIndex) {
       <div class="mt-3 text-[10px] text-zinc-400">
         Tip: click a <span class="text-cyan-200 font-bold">player name</span> to reveal their role briefly; click a <span class="text-amber-200 font-bold">guessed name</span> to reveal that guessed player’s role briefly.
       </div>
+      <div id="role-tooltip-popup" class="hidden fixed inset-0 z-[80] bg-black/70 flex items-center justify-center p-4">
+        <div class="w-full max-w-md rounded-2xl bg-zinc-900 border border-cyan-400/30 p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-cyan-300 font-bold text-sm">Player details</div>
+            <button type="button" onclick="closeRoleTooltipPopup()" class="text-zinc-300 hover:text-white">✕</button>
+          </div>
+          <div id="role-tooltip-popup-content" class="text-[11px] text-zinc-100"></div>
+        </div>
+      </div>
     `;
+    if (!anySkill) box.querySelectorAll(".skill-col").forEach((el) => el.remove());
+    if (!anySg) box.querySelectorAll(".sg-col").forEach((el) => el.remove());
   };
 
   // Default render (no SG info yet)
@@ -4145,22 +4161,24 @@ function togglePointCalc(id) {
 function revealRoleTooltip(roundIndex, seat, kind) {
   const item = state.roundHistory?.[roundIndex];
   if (!item) return;
-  const tip = document.getElementById("role-tooltip");
-  if (!tip) return;
+  const pop = document.getElementById("role-tooltip-popup");
+  const content = document.getElementById("role-tooltip-popup-content");
+  if (!pop || !content) return;
   const nm = String((item.playerNames?.[seat - 1] || `P${seat}`)).trim() || `P${seat}`;
   const role = String((item.roles?.[seat - 1] || "—")).trim() || "—";
   const color = roleToColor[role];
   const roleInfo = color ? roleByColor[color] : null;
   const prefix = kind === "guessed" ? "Guessed player" : "Player";
-  tip.innerHTML = `
+  content.innerHTML = `
     <div><span class="text-cyan-200 font-bold">${prefix}:</span> ${nm} <span class="text-zinc-400">(${role})</span></div>
     ${roleInfo ? `<div class="mt-1 text-amber-200">Ability: ${roleInfo.desc}</div><div class="text-[9px] text-zinc-300">Usage: ${roleInfo.usage}</div>` : ""}
   `;
-  tip.classList.remove("hidden");
-  clearTimeout(revealRoleTooltip._t);
-  revealRoleTooltip._t = setTimeout(() => {
-    tip.classList.add("hidden");
-  }, 2200);
+  pop.classList.remove("hidden");
+}
+
+function closeRoleTooltipPopup() {
+  const pop = document.getElementById("role-tooltip-popup");
+  if (pop) pop.classList.add("hidden");
 }
 
 function showPointRulesModal(focusRule = null) {
