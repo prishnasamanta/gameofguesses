@@ -161,7 +161,34 @@ function buildAssignedRoles(targetPlayers) {
     RED: "The Hunter",
     BLUE: "The Siphon"
   };
-  const roles = colorOrder.slice(0, targetPlayers).map((c) => roleByColor[c]);
+  const colorCategory = {
+    YELLOW: "LIGHT",
+    PINK: "LIGHT",
+    NEON: "LIGHT",
+    GOLD: "LIGHT",
+    LIME: "LIGHT",
+    ORANGE: "LIGHT",
+    GREEN: "DARK",
+    BROWN: "DARK",
+    VIOLET: "DARK",
+    SILVER: "DARK",
+    RED: "DARK",
+    BLUE: "DARK"
+  };
+  const lights = colorOrder.filter((c) => colorCategory[c] === "LIGHT");
+  const darks = colorOrder.filter((c) => colorCategory[c] === "DARK");
+  const lightCount = Math.ceil(targetPlayers / 2); // odd -> one extra light
+  const darkCount = targetPlayers - lightCount;
+  const pick = (arr, count) => {
+    const pool = [...arr];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, count);
+  };
+  const selectedColors = [...pick(lights, lightCount), ...pick(darks, darkCount)];
+  const roles = selectedColors.map((c) => roleByColor[c]);
   for (let i = roles.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [roles[i], roles[j]] = [roles[j], roles[i]];
