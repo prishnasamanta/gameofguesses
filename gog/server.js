@@ -80,6 +80,7 @@ function getOrCreateRoom(code) {
       hostId: null, // current host socket.id (changes on reconnect)
       hostPlayerKey: null, // stable identity
       targetPlayers: 4,
+      matchStarted: false,
       // Seats are stable across refreshes while the playerKey is retained.
       // { playerKey, socketId|null, name, seatIndex, lastSeen }
       players: []
@@ -111,16 +112,34 @@ function emitLobby(room) {
 function removeSocketFromRooms(socketId) {
   for (const [code, room] of rooms.entries()) {
     let changed = false;
+    let removedHost = false;
     for (const p of room.players) {
       if (p.socketId === socketId) {
-        p.socketId = null; // keep seat on refresh
-        p.lastSeen = Date.now();
+        if (room.matchStarted) {
+          // During match: keep seat so game can continue with bot control.
+          p.socketId = null;
+          p.lastSeen = Date.now();
+        } else {
+          // In lobby: remove immediately for instant player-list update.
+          p._remove = true;
+        }
         changed = true;
       }
     }
+    if (!room.matchStarted) {
+      const before = room.players.length;
+      room.players = room.players.filter((p) => !p._remove);
+      if (room.players.length !== before) changed = true;
+    }
     if (room.hostId === socketId) {
       room.hostId = null;
+      removedHost = true;
       changed = true;
+    }
+    if (removedHost && room.players.length) {
+      const connected = room.players.find((p) => !!p.socketId) || room.players[0];
+      room.hostId = connected.socketId || null;
+      room.hostPlayerKey = connected.playerKey || null;
     }
     if (changed) emitLobby(room);
   }
@@ -229,6 +248,7 @@ io.on("connection", (socket) => {
       return;
     }
     const assignedRoles = buildAssignedRoles(room.targetPlayers);
+    room.matchStarted = true;
     const ordered = room.players.slice().sort((a, b) => a.seatIndex - b.seatIndex);
     const playerOrder = ordered.map((p) => p.socketId);
     const playerKeysInSeat = ordered.map((p) => p.playerKey);
