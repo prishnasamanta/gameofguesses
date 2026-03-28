@@ -44,8 +44,10 @@
     round,
     roleToColor,
     colorCategory, // colorName => LIGHT|DARK
-    myId
+    myId,
+    manualRoleActions // optional { [seat:number]: { type, target, ... } }
   }) {
+    const manual = manualRoleActions && typeof manualRoleActions === "object" ? manualRoleActions : {};
     const deltasAdjust = new Array(numPlayers).fill(0);
     const reasonsAdjust = new Array(numPlayers).fill("");
 
@@ -103,11 +105,22 @@
       const role = assignedRoles[p - 1];
 
       if (role === "The Oracle") {
-        const t = randInt(
-          `${roomCode}|set${set}|round${round}|oracle|seat${p}`,
-          1,
-          numPlayers
-        );
+        const man = manual[p];
+        let t;
+        if (
+          man &&
+          man.type === "oracle" &&
+          man.target >= 1 &&
+          man.target <= numPlayers
+        ) {
+          t = man.target;
+        } else {
+          t = randInt(
+            `${roomCode}|set${set}|round${round}|oracle|seat${p}`,
+            1,
+            numPlayers
+          );
+        }
         if (t !== p) {
           deltasAdjust[t - 1] -= 10;
           deltasAdjust[p - 1] += 10;
@@ -117,11 +130,22 @@
           roleEventsByPlayer[p - 1].oracle = { target: t, stolen: 0 };
         }
       } else if (role === "The Corrupter") {
-        const t = randInt(
-          `${roomCode}|set${set}|round${round}|corrupter|seat${p}`,
-          1,
-          numPlayers
-        );
+        const man = manual[p];
+        let t;
+        if (
+          man &&
+          man.type === "corrupter" &&
+          man.target >= 1 &&
+          man.target <= numPlayers
+        ) {
+          t = man.target;
+        } else {
+          t = randInt(
+            `${roomCode}|set${set}|round${round}|corrupter|seat${p}`,
+            1,
+            numPlayers
+          );
+        }
         const tRole = assignedRoles[t - 1];
         const tColor = roleToColor[tRole];
         const cat = colorCategory[tColor] || "DARK";
