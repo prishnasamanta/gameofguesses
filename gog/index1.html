@@ -483,8 +483,10 @@ SET 1 • ROUND 0 / ?
 <div id="guess-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
 <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-yellow-400/40 modal">
 <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ANNOUNCED COLOR</div>
-<div id="modal-announced-color" class="text-3xl md:text-4xl font-bold text-center mb-2 px-6 py-3 rounded-2xl inline-block mx-auto"></div>
-<div id="modal-announced-category" class="text-center text-sm font-bold mb-4 text-zinc-300"></div>
+<div class="flex flex-wrap justify-center items-stretch gap-3 mb-4">
+  <div id="modal-announced-color" class="text-3xl md:text-4xl font-bold text-center px-6 py-3 rounded-2xl inline-block shrink-0"></div>
+  <div id="modal-announced-category" class="text-3xl md:text-4xl font-bold text-center px-6 py-3 rounded-2xl inline-block shrink-0 min-w-[7rem]"></div>
+</div>
 <p id="guess-instruction" class="text-center text-sm md:text-base mb-4 text-zinc-200">Click a seat on the table to guess.</p>
 <div id="guess-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></div>
 <div id="modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-6"></div>
@@ -3207,6 +3209,7 @@ function continueToGuessFromRole() {
   if (instr) instr.classList.remove("hidden");
   clearRoleModalSkillInfo();
   hide(dom.roleModal);
+  openGuessModal();
 }
 
 function renderRoleSelectionCircle(requiredCount, selectable) {
@@ -3366,25 +3369,36 @@ function openGuessModal() {
   dom.modalColor.style.color = getContrastingText(announcedHex);
   dom.modalColor.textContent = state.announcedColor;
   const catEl = $("modal-announced-category");
+  const chipClass = "text-3xl md:text-4xl font-bold text-center px-6 py-3 rounded-2xl inline-block shrink-0";
   if (catEl) {
     const cat = colorCategory[state.announcedColor] || "";
+    catEl.className = `${chipClass} min-w-[7rem]`;
     if (cat === "LIGHT") {
-      catEl.textContent = "☀ LIGHT (this color belongs to the Light team)";
-      catEl.className = "text-center text-sm font-bold mb-4 text-amber-200";
+      catEl.textContent = "☀ LIGHT";
+      const bg = "#f59e0b";
+      catEl.style.background = bg;
+      catEl.style.color = getContrastingText(bg);
+      catEl.classList.remove("hidden");
     } else if (cat === "DARK") {
-      catEl.textContent = "☾ DARK (this color belongs to the Dark team)";
-      catEl.className = "text-center text-sm font-bold mb-4 text-violet-200";
+      catEl.textContent = "☾ DARK";
+      const bg = "#7c3aed";
+      catEl.style.background = bg;
+      catEl.style.color = getContrastingText(bg);
+      catEl.classList.remove("hidden");
     } else {
       catEl.textContent = cat ? String(cat) : "";
-      catEl.className = "text-center text-sm font-bold mb-4 text-zinc-300";
+      catEl.style.background = "transparent";
+      catEl.style.color = "";
+      if (!cat) catEl.classList.add("hidden");
+      else catEl.classList.remove("hidden");
     }
   }
+  dom.modalColor.className = `${chipClass}`;
 
   // High Roller can skip guess button not used here; keep hidden by default.
   const myRole = state.assignedRoles[state.myId - 1];
   const lockGold = myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2;
   state.playerGuess = lockGold ? state.highRollerGuesses[0] : null;
-  renderMiniCircle();
   const skipBtn = $("skip-guess-btn");
   if (skipBtn) skipBtn.classList.add("hidden");
 
@@ -3399,10 +3413,24 @@ function openGuessModal() {
     skill.classList.add("hidden");
   }
   show(dom.modal);
+  // Modal was hidden: clientWidth was 0 if we laid out seats before show — measure after paint.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => renderMiniCircle());
+  });
 }
 
-function renderMiniCircle() {
-  dom.modalCircle.innerHTML = `
+function renderMiniCircle(retry = 0) {
+  const circleEl = dom.modalCircle;
+  let size = circleEl.clientWidth || circleEl.offsetWidth;
+  const rect = circleEl.getBoundingClientRect();
+  if (rect.width > 0) size = Math.round(rect.width);
+  if (!size && retry < 12) {
+    requestAnimationFrame(() => renderMiniCircle(retry + 1));
+    return;
+  }
+  if (!size) size = 288;
+
+  circleEl.innerHTML = `
     <div class="absolute inset-0 rounded-full border-4 border-yellow-400/70 shadow-[0_0_30px_rgba(251,191,36,0.35)]"></div>
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
       <div class="px-3 py-1 rounded-xl bg-black/30 border border-yellow-500/30 text-amber-200/80 text-[10px] font-bold tracking-[0.28em]">
@@ -3410,9 +3438,9 @@ function renderMiniCircle() {
       </div>
     </div>
   `;
-  const size = dom.modalCircle.clientWidth || 288;
   const radius = (size / 2) * 0.72;
-  const cx = size / 2, cy = size / 2;
+  const cx = size / 2;
+  const cy = size / 2;
   const myRole = state.assignedRoles[state.myId - 1];
   const lockGold = myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2;
   const lockedSet = new Set(lockGold ? state.highRollerGuesses : []);
