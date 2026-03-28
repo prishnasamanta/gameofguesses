@@ -267,7 +267,7 @@ io.on("connection", (socket) => {
     emitLobby(room);
   });
 
-  socket.on("start_match", ({ roomCode }) => {
+  socket.on("start_match", ({ roomCode, gameTillResult }) => {
     const code = (roomCode || "").toUpperCase();
     const room = rooms.get(code);
     if (!room) return;
@@ -276,6 +276,7 @@ io.on("connection", (socket) => {
       socket.emit("room_error", { message: `Waiting for players (${room.players.length}/${room.targetPlayers}).` });
       return;
     }
+    room.gameTillResult = !!gameTillResult;
     const assignedRoles = buildAssignedRoles(room.targetPlayers);
     room.matchStarted = true;
     const ordered = room.players.slice().sort((a, b) => a.seatIndex - b.seatIndex);
@@ -287,7 +288,8 @@ io.on("connection", (socket) => {
       assignedRoles,
       playerOrder,
       playerNames: ordered.map((p) => p.name),
-      playerKeysInSeat
+      playerKeysInSeat,
+      gameTillResult: !!room.gameTillResult
     });
   });
 
