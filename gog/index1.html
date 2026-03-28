@@ -226,6 +226,16 @@ body {
   min-height: 0;
 }
 
+.guess-announce-chip {
+  font-size: clamp(0.68rem, 2.8vw + 0.45rem, 1.65rem);
+  line-height: 1.12;
+}
+@media (min-width: 640px) {
+  .guess-announce-chip {
+    font-size: clamp(1.05rem, 1.5vw + 0.65rem, 2.35rem);
+  }
+}
+
 @media (max-width: 640px) {
   #start-screen h1 { font-size: clamp(1.75rem, 10vw, 3rem); line-height: 1.15; }
   #multiplayer-screen .flex.gap-3 { flex-wrap: wrap; justify-content: center; }
@@ -257,39 +267,78 @@ body {
 <body>
 
 <!-- START SCREEN -->
-<div id="start-screen" class="min-h-screen flex flex-col items-center justify-center gap-12 p-6">
-<h1 class="text-6xl md:text-9xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-yellow-400 to-green-400 text-center leading-tight">
-GAME OF<br>GUESSES
-</h1>
-<button onclick="selectMode()" class="px-16 py-10 bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 rounded-3xl text-4xl md:text-5xl font-bold shadow-2xl transform hover:scale-105 transition-all duration-300">
-PLAY WITH COMPUTER
-</button>
-<button onclick="startOnlineMode()" class="px-12 py-6 bg-gradient-to-br from-indigo-600 to-sky-700 hover:from-indigo-700 hover:to-sky-800 rounded-3xl text-2xl md:text-3xl font-bold shadow-2xl transform hover:scale-105 transition-all duration-300">
-PLAY MULTIPLAYER ONLINE
-</button>
-<button onclick="showTestRolesScreen()" class="px-10 py-4 bg-gradient-to-br from-purple-600 to-pink-700 hover:from-purple-700 hover:to-pink-800 rounded-3xl text-xl md:text-2xl font-bold shadow-2xl transform hover:scale-105 transition-all duration-300">
-TEST ROLES
-</button>
-<button onclick="openAdminLogin()" class="px-8 py-3 bg-gradient-to-br from-zinc-700 to-zinc-800 hover:from-zinc-600 hover:to-zinc-700 rounded-2xl text-base md:text-lg font-bold shadow-xl transition-all duration-300">
-ADMIN LOGIN
-</button>
-<div class="w-full max-w-5xl grid md:grid-cols-2 gap-4 mt-2">
-  <div class="bg-zinc-900/60 border border-cyan-500/30 rounded-2xl p-4">
-    <div class="text-cyan-300 font-bold mb-2">POINT SYSTEM</div>
-    <div class="text-xs text-zinc-200 leading-relaxed space-y-1">
-      <div>Rule 1: nobody guesses holder -> holder gains from all.</div>
-      <div>Rule 2: correct holder guess -> +5.</div>
-      <div>Rule 3: holder catches correct guesser -> bonus/-5 exchange.</div>
-      <div>Rule 4: 2+ correct and failed catch -> extra bonuses.</div>
+<div id="start-screen" class="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-black text-zinc-100">
+  <div class="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 md:py-14 pb-16 flex flex-col gap-10 md:gap-12">
+    <header class="text-center space-y-4">
+      <h1 class="text-6xl md:text-9xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-yellow-400 to-green-400 leading-tight">
+        GAME OF<br>GUESSES
+      </h1>
+      <p class="text-zinc-400 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
+        A round-based party game of hidden roles, team colors, and reading the table. Each round an <span class="text-amber-300/90">announced color</span> reveals who holds the card—then everyone guesses, skills fire, and scores shift.
+      </p>
+    </header>
+
+    <div class="grid sm:grid-cols-2 gap-3 md:gap-4">
+      <button type="button" onclick="selectMode()" class="group text-left rounded-2xl md:rounded-3xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/80 to-teal-950/60 p-5 md:p-6 shadow-xl shadow-emerald-950/30 hover:border-emerald-400/70 hover:shadow-emerald-900/40 transition-all duration-300 flex flex-col gap-2 min-h-[7.5rem]">
+        <span class="text-xs font-bold uppercase tracking-widest text-emerald-400/90">Offline • 4–12 players</span>
+        <span class="text-xl md:text-2xl font-black text-white">Play with computer</span>
+        <span class="text-xs md:text-sm text-zinc-400 leading-relaxed">Fill the table with AI opponents. Configure sets and “play till result.” Ideal to learn roles and pacing.</span>
+        <span class="text-emerald-300 text-sm font-bold mt-1 group-hover:translate-x-1 transition-transform">Start →</span>
+      </button>
+      <button type="button" onclick="startOnlineMode()" class="group text-left rounded-2xl md:rounded-3xl border border-sky-500/40 bg-gradient-to-br from-indigo-950/80 to-sky-950/60 p-5 md:p-6 shadow-xl shadow-sky-950/30 hover:border-sky-400/70 transition-all duration-300 flex flex-col gap-2 min-h-[7.5rem]">
+        <span class="text-xs font-bold uppercase tracking-widest text-sky-300/90">Online • room code</span>
+        <span class="text-xl md:text-2xl font-black text-white">Play multiplayer</span>
+        <span class="text-xs md:text-sm text-zinc-400 leading-relaxed">Host or join a lobby, sync rounds over the network, and use the same rules as local play.</span>
+        <span class="text-sky-300 text-sm font-bold mt-1 group-hover:translate-x-1 transition-transform">Open lobby →</span>
+      </button>
     </div>
-  </div>
-  <div class="bg-zinc-900/60 border border-fuchsia-500/30 rounded-2xl p-4">
-    <div class="text-fuchsia-300 font-bold mb-2">ROLE SNAPSHOT</div>
-    <div class="text-xs text-zinc-200 leading-relaxed">
-      Light and Dark roles each round. Use <span class="text-amber-300">Rules</span> in game to see full role cards, flip details, and examples.
+
+    <div class="flex flex-col sm:flex-row flex-wrap justify-center items-stretch sm:items-center gap-3 max-w-md sm:max-w-none mx-auto w-full">
+      <button type="button" onclick="showTestRolesScreen()" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-700 to-pink-700 hover:from-purple-600 hover:to-pink-600 text-sm md:text-base font-bold border border-purple-400/30 shadow-lg w-full sm:w-auto text-center">
+        Test roles
+      </button>
+      <button type="button" onclick="openAdminLogin()" class="px-6 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-sm md:text-base font-bold text-zinc-200 w-full sm:w-auto text-center">
+        Admin login
+      </button>
     </div>
+
+    <section class="rounded-2xl md:rounded-3xl border border-zinc-700/80 bg-zinc-900/45 backdrop-blur-sm p-5 md:p-8 space-y-5">
+      <div>
+        <h2 class="text-lg md:text-xl font-bold text-amber-300 tracking-wide">How to play</h2>
+        <p class="text-xs text-zinc-500 mt-1">Same flow on phone and desktop—scroll to read; in-game buttons are sized for touch.</p>
+      </div>
+      <ol class="list-decimal list-inside space-y-3 text-sm md:text-base text-zinc-300 leading-relaxed marker:text-cyan-400">
+        <li><span class="font-semibold text-zinc-100">Start a match</span> and pick player count (and sets, or “game till result”).</li>
+        <li>Each round shows an <span class="text-amber-200">announced color</span>. That player is the <span class="text-yellow-200">holder</span>; their role ties to that color’s team (Light or Dark).</li>
+        <li>Everyone submits <span class="text-cyan-200">who they think holds the card</span>. <span class="text-rose-300">No vote</span> costs −25 for that round.</li>
+        <li>If your role has an <span class="text-pink-300">action</span>, use it when prompted (table popups), then lock in your guess.</li>
+        <li>After scores update, you get discussion time, then the next round with a new announced color until the set—or match—ends.</li>
+        <li>Open <span class="text-zinc-100 font-medium">Rules</span> anytime for full role text, point math, and examples.</li>
+      </ol>
+      <div class="grid md:grid-cols-2 gap-3 md:gap-4 pt-2">
+        <div class="rounded-xl border border-cyan-500/25 bg-zinc-950/50 p-4">
+          <div class="text-cyan-300 font-bold text-sm mb-2">Scoring snapshot</div>
+          <ul class="text-xs sm:text-sm text-zinc-300 space-y-1.5 leading-snug">
+            <li>Nobody guesses the holder → holder gains from everyone else.</li>
+            <li>Correct guess of holder → +5 (with extra rules for catches and failed catches).</li>
+            <li>Role skills can steal points, strike targets, swap scores, and more—see Rules for each card.</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-fuchsia-500/25 bg-zinc-950/50 p-4">
+          <div class="text-fuchsia-300 font-bold text-sm mb-2">On mobile</div>
+          <ul class="text-xs sm:text-sm text-zinc-300 space-y-1.5 leading-snug">
+            <li>Use landscape if the table feels tight; modals scroll inside the yellow / cyan frames.</li>
+            <li>The guess screen keeps <span class="text-amber-200">color</span> and <span class="text-violet-300">Light/Dark</span> on one row.</li>
+            <li>Round details: pinch-zoom the wide table if needed; Light/Dark teams stay side by side.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-center text-[11px] sm:text-xs text-zinc-600 pt-2 pb-4">
+      Game of Guesses — social deduction with structured rounds and role abilities.
+    </footer>
   </div>
-</div>
 </div>
 
 <!-- ADMIN LIVE PANEL -->
@@ -481,14 +530,14 @@ SET 1 • ROUND 0 / ?
 
 <!-- GUESS MODAL -->
 <div id="guess-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
-<div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-yellow-400/40 modal">
+<div class="bg-zinc-900 rounded-3xl p-4 sm:p-5 md:p-6 w-full max-w-xl border border-yellow-400/40 modal max-h-[min(92vh,720px)] overflow-y-auto overscroll-contain">
 <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ANNOUNCED COLOR</div>
-<div class="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-2 sm:gap-3 mb-4 w-full max-w-full px-1">
-  <div id="modal-announced-color" class="text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 max-w-[min(100%,14rem)] truncate"></div>
-  <div id="modal-announced-category" class="text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 min-w-0 sm:min-w-[7rem] max-w-[min(100%,12rem)]"></div>
+<div id="guess-modal-announce-row" class="flex flex-wrap sm:flex-nowrap items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4 w-full max-w-xl mx-auto px-1 min-w-0">
+  <div id="modal-announced-color" class="guess-announce-chip flex-none min-w-0 text-center font-bold rounded-xl sm:rounded-2xl px-2.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 truncate max-w-[min(72vw,15rem)] sm:max-w-[16rem] border border-white/15 shadow-md"></div>
+  <div id="modal-announced-category" class="hidden guess-announce-chip shrink-0 whitespace-nowrap text-center font-bold rounded-xl sm:rounded-2xl px-3 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 border border-white/15 shadow-md text-xs sm:text-sm md:text-base"></div>
 </div>
-<p id="guess-instruction" class="text-center text-sm md:text-base mb-4 text-zinc-200">Click a seat on the table to guess.</p>
-<div id="guess-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></div>
+<div id="guess-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3 px-2 break-words"></div>
+<p id="guess-instruction" class="text-center text-sm md:text-base mb-4 text-zinc-200 px-1">Click a seat on the table to guess.</p>
 <div id="modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-6"></div>
 <div class="text-center mb-3">
   <button onclick="submitPlayerGuess()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Submit Guess</button>
@@ -505,20 +554,23 @@ SET 1 • ROUND 0 / ?
 
 <!-- ROLE MODAL -->
 <div id="role-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
-  <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-pink-400/40 modal relative">
-    <button type="button" onclick="closeRoleModalOnly()" class="absolute right-3 top-3 z-20 w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-lg font-bold leading-none border border-zinc-600" title="Close">✕</button>
+  <div class="bg-zinc-900 rounded-3xl p-4 sm:p-5 md:p-6 w-full max-w-xl border border-pink-400/40 modal relative max-h-[min(92vh,720px)] overflow-y-auto overscroll-contain">
+    <button type="button" id="role-modal-corner-close-btn" onclick="closeRoleModalOnly()" class="hidden absolute right-3 top-[12px] z-20 w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-lg font-bold leading-none border border-zinc-600" title="Close">✕</button>
     <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3 pr-8">ROLE ACTION</div>
     <h2 id="role-modal-title" class="text-2xl md:text-3xl text-center mb-2">Role Action</h2>
     <p id="role-modal-desc" class="text-center text-sm md:text-base mb-4 text-zinc-200"></p>
-    <p id="role-modal-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></p>
-    <div id="role-modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-4"></div>
-    <p id="role-modal-instruction" class="hidden text-center text-xs md:text-sm text-zinc-300 mb-4">Select players on the table.</p>
+    <p id="role-modal-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3 px-1 break-words"></p>
+    <p id="role-modal-highroller-announce" class="hidden text-center text-xs text-amber-300 mb-3 px-2 break-words"></p>
+    <div id="role-modal-circle" class="relative w-64 h-64 md:w-72 md:h-72 mx-auto mb-4 shrink-0"></div>
+    <p id="role-modal-instruction" class="hidden text-center text-xs md:text-sm text-zinc-300 mb-3 px-1">Select players on the table.</p>
+    <div id="role-modal-post-instruction-hint" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3 px-2 break-words"></div>
     <div id="role-modal-result-wrap" class="hidden text-center">
       <div id="role-modal-result" class="text-sm md:text-base text-pink-300 font-bold"></div>
     </div>
-    <div class="mt-4 text-center">
-      <button id="role-trigger-btn" onclick="triggerRoleClaim()" class="hidden px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold mr-2">Trigger Role</button>
-      <button id="role-apply-btn" onclick="applyRoleSelection()" class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold mr-2">Apply Role</button>
+    <div class="mt-4 text-center flex flex-wrap justify-center items-center gap-2">
+      <button id="role-trigger-btn" onclick="triggerRoleClaim()" class="hidden px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold">Trigger Role</button>
+      <button id="role-apply-btn" onclick="applyRoleSelection()" class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold">Apply Role</button>
+      <button type="button" id="role-ok-guess-btn" onclick="closeRoleModalThenOpenGuess()" class="hidden px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Okay</button>
     </div>
   </div>
 </div>
@@ -575,16 +627,16 @@ SET 1 • ROUND 0 / ?
 </div>
 
 <!-- ROUND DETAILS MODAL -->
-<div id="round-details-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
-  <div class="bg-zinc-900 rounded-3xl p-6 w-full max-w-2xl border border-cyan-400/40 max-h-[90vh] modal-scroll">
-    <div class="modal-sticky-header flex items-center justify-between mb-0">
-      <div class="flex items-center gap-2">
-        <h2 class="text-2xl font-bold text-cyan-300">Round Details</h2>
-        <button onclick="showPointRulesModal()" title="Point system" class="w-7 h-7 rounded-full bg-cyan-700 hover:bg-cyan-800 text-white text-sm font-black">?</button>
+<div id="round-details-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-2 sm:p-4">
+  <div class="bg-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-6 w-full max-w-2xl border border-cyan-400/40 max-h-[92vh] sm:max-h-[90vh] modal-scroll">
+    <div class="modal-sticky-header flex items-center justify-between mb-0 gap-2">
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <h2 class="text-lg sm:text-2xl font-bold text-cyan-300 truncate">Round Details</h2>
+        <button onclick="showPointRulesModal()" title="Point system" class="shrink-0 w-7 h-7 rounded-full bg-cyan-700 hover:bg-cyan-800 text-white text-sm font-black">?</button>
       </div>
-      <button onclick="hideRoundDetailsModal()" class="text-zinc-300 hover:text-white">✕</button>
+      <button onclick="hideRoundDetailsModal()" class="shrink-0 text-zinc-300 hover:text-white text-xl leading-none px-1" aria-label="Close">✕</button>
     </div>
-    <div id="round-details-content" class="modal-scroll-body text-sm text-zinc-200 space-y-2 pt-3"></div>
+    <div id="round-details-content" class="modal-scroll-body text-xs sm:text-sm text-zinc-200 space-y-2 pt-2 sm:pt-3"></div>
   </div>
 </div>
 
@@ -672,6 +724,10 @@ const state = {
   playerScores: [],
   highRollerUsed: false,
   highRollerGuesses: [],
+  /** Round index (1-based) when High Roller locked two targets; guess UI only locks that round. */
+  highRollerGuessRound: null,
+  hunterUsed: false,
+  roundRoleActions: {},
   empathPeekTarget: null,
   roundHistory: [],
   chatTimer: null,
@@ -688,6 +744,18 @@ const state = {
   executionerUsed: false,
   soulSwapperUsed: false,
   alchemistUsed: false,
+  /** Hide foot instruction under role table (e.g. Illuminator). */
+  roleModalHideFootInstruction: false,
+  lastSoulSwapTarget: null,
+  lastSiphonTarget: null,
+  lastExecutionerMark: null,
+  lastOracleTarget: null,
+  lastCorrupterTarget: null,
+  lastIlluminatorTarget: null,
+  lastHunterStrikeSeat: null,
+  lastAlchemistSummary: null,
+  /** One-line hint for guess modal after a role action (e.g. Corrupter). */
+  guessModalRoleHint: null,
   isTestMode: false,
   setColorOrder: [],
   roomCode: "",
@@ -735,7 +803,7 @@ PINK: { role: "The Empath", desc: "Sense Suspicion: select one target and see th
   GREEN: { role: "The Corrupter", desc: "Identify player: if Light then -10, if Dark then -5, self-target -15.", usage: "Every Round" },
   BROWN: { role: "The Executioner", desc: "Death Mark: if marked target reaches -50 they eliminate; if +50 you eliminate.", usage: "Once per Set" },
   VIOLET: { role: "The Soul Swapper", desc: "Point Swap: swap your total with one chosen player.", usage: "Once per Game" },
-  SILVER: { role: "The Alchemist", desc: "Gold Tarnish: special Gold interaction, +/-100 risk/reward conditions.", usage: "Once per Game" },
+  SILVER: { role: "The Alchemist", desc: "Gold Tarnish: only if your score is below −100 — skip, force Gold −100, or pick Gold’s seat on the table. Correct pick: Gold −200, you +200. Wrong pick: you −200, Gold +100.", usage: "Once per Game" },
   RED: { role: "The Hunter", desc: "Precise Strike: find 1 Light between 2 targets; strike for -30.", usage: "Once per Set" },
   BLUE: { role: "The Siphon", desc: "Dark Knowledge: reveal Dark scores; steal all points from one Dark player.", usage: "Once per Game" }
 };
@@ -1883,15 +1951,125 @@ function listenToFirebaseRoom(roomCode) {
 
     // Firebase-driven round synchronization (guessing -> discussion -> next_round_ready)
     if (data.roundState && state.numPlayers > 0 && dom.circle) {
-      applyRoundStateFromFirebase(data.roundState, data.roundGuesses || {});
+      applyRoundStateFromFirebase(data.roundState, data.roundGuesses || {}, data.roundRoleActions || {});
     }
   });
 }
 
-function applyRoundStateFromFirebase(roundState, roundGuesses) {
+function normalizeRoundRoleActionsMap(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  Object.keys(raw).forEach((k) => {
+    const seat = parseInt(k, 10);
+    const v = raw[k];
+    if (Number.isFinite(seat) && seat >= 1 && v && typeof v === "object") out[seat] = v;
+  });
+  return out;
+}
+
+function pushRoundRoleActionOnline(payload) {
+  if (!state.onlineMode || !state.roomCode || !window.db || !window.rtdb) return;
+  const { ref, update } = window.rtdb;
+  update(ref(window.db), {
+    [`rooms/${state.roomCode}/roundRoleActions/${state.myId}`]: payload
+  });
+  state.roundRoleActions = { ...(state.roundRoleActions || {}), [String(state.myId)]: payload };
+}
+
+function removeRoleLaterBtn() {
+  const b = $("role-later-btn");
+  if (b) b.remove();
+}
+
+function setRoleModalCornerCloseVisible(visible) {
+  const b = $("role-modal-corner-close-btn");
+  if (b) b.classList.toggle("hidden", !visible);
+}
+
+function getDefaultRoleConsumedMessage(roleName) {
+  switch (roleName) {
+    case "The Soul Swapper":
+      return state.lastSoulSwapTarget != null
+        ? `Soul Swapper already used this game. You swapped scores with P${state.lastSoulSwapTarget}.`
+        : "Soul Swapper already used this game.";
+    case "The Siphon":
+      return state.lastSiphonTarget != null
+        ? `Siphon already used once this game. You drained P${state.lastSiphonTarget}.`
+        : "Siphon already used once this game.";
+    case "The High Roller":
+      return state.highRollerGuesses.length === 2
+        ? `High Roller ability already used this set. Your double targets were P${state.highRollerGuesses[0]} and P${state.highRollerGuesses[1]}.`
+        : "High Roller ability already used this set.";
+    case "The Executioner":
+      return state.lastExecutionerMark != null
+        ? `Executioner already used this set. Death Mark was on P${state.lastExecutionerMark}.`
+        : "Executioner already used this set.";
+    case "The Hunter":
+      return state.lastHunterStrikeSeat != null
+        ? `Hunter ability already used this set. Your strike resolved on P${state.lastHunterStrikeSeat}.`
+        : "Hunter ability already used this set.";
+    case "The Alchemist":
+      return state.lastAlchemistSummary || "Alchemist already used this game.";
+    default:
+      return `${roleName}: ability already used.`;
+  }
+}
+
+function showRoleActionAlreadyConsumed(roleName, message) {
+  removeRoleLaterBtn();
+  setRoleModalCornerCloseVisible(false);
+  const msg = message != null && String(message).length ? message : getDefaultRoleConsumedMessage(roleName);
+  const colorName = roleToColor[roleName];
+  const abilityMap = {
+    "The Oracle": "Reveal Alignment",
+    "The Empath": "Sense Suspicion",
+    "The Illuminator": "Private Hint",
+    "The High Roller": "Double Guess",
+    "The Reflector": "Counter-Spy",
+    "The Merchant": "Prosperity",
+    "The Corrupter": "Identify",
+    "The Executioner": "Death Mark",
+    "The Soul Swapper": "Point Swap",
+    "The Alchemist": "Gold Tarnish",
+    "The Hunter": "Precise Strike",
+    "The Siphon": "Dark Knowledge"
+  };
+  const abilityName = abilityMap[roleName] || "Special Ability";
+  const usageText = roleByColor[colorName]?.usage || "";
+  dom.roleModalTitle.innerHTML = `
+    <div class="text-2xl md:text-3xl text-center mb-2">${roleName.toUpperCase()}</div>
+    <div class="text-base md:text-lg text-cyan-300 text-center">${abilityName}</div>
+    ${usageText ? `<div class="text-xs text-amber-300 text-center mt-1">${usageText}</div>` : ""}
+  `;
+  dom.roleModalDesc.innerHTML = "";
+  setRoleModalSkillInfo(roleName);
+  hideRoleModalHighRollerAnnounce();
+  resetRoleModalFlowHints();
+  dom.roleModalResult.textContent = msg;
+  const rwrap = $("role-modal-result-wrap");
+  if (rwrap) rwrap.classList.remove("hidden");
+  dom.roleModalCircle.innerHTML = "";
+  dom.roleModalCircle.classList.add("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) instr.classList.add("hidden");
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.add("hidden");
+  const tbtn = $("role-trigger-btn");
+  if (tbtn) tbtn.classList.add("hidden");
+  const okBtn = $("role-ok-guess-btn");
+  if (okBtn) okBtn.classList.remove("hidden");
+  state.rolePendingApply = null;
+  state.roleRequiredCount = 0;
+  state.roleSelection = [];
+  show(dom.roleModal);
+  syncRoleResultVisibility();
+}
+
+function applyRoundStateFromFirebase(roundState, roundGuesses, roundRoleActions) {
   if (!roundState || !state.numPlayers) return;
   state.roundState = roundState;
   state.roundGuesses = roundGuesses || {};
+  state.roundRoleActions = roundRoleActions && typeof roundRoleActions === "object" ? roundRoleActions : {};
 
   const phaseKey = `${roundState.set ?? state.currentSet}_${roundState.round ?? state.currentRound}_${roundState.phase}`;
   const lastKey = state.lastRoundPhaseKey || "";
@@ -2138,7 +2316,7 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
           state._resultsPhaseRerenderTimer = null;
           return;
         }
-        applyRoundStateFromFirebase(state.roundState, state.roundGuesses);
+        applyRoundStateFromFirebase(state.roundState, state.roundGuesses, state.roundRoleActions || {});
       }, 1000);
     }
 
@@ -2460,12 +2638,24 @@ function startSimulation(n, config = null) {
   state.playerScores = new Array(n).fill(0);
   state.highRollerUsed = false;
   state.highRollerGuesses = [];
+  state.highRollerGuessRound = null;
+  state.hunterUsed = false;
+  state.roundRoleActions = {};
   state.empathPeekTarget = null;
   state.roundHistory = [];
   state.executionerUsed = false;
   state.soulSwapperUsed = false;
   state.alchemistUsed = false;
   state.siphonUsed = false;
+  state.lastSoulSwapTarget = null;
+  state.lastSiphonTarget = null;
+  state.lastExecutionerMark = null;
+  state.lastOracleTarget = null;
+  state.lastCorrupterTarget = null;
+  state.lastIlluminatorTarget = null;
+  state.lastHunterStrikeSeat = null;
+  state.lastAlchemistSummary = null;
+  state.roleModalHideFootInstruction = false;
   state.isTestMode = !!config?.isTestMode;
   state.currentRoundSgEvents = {};
   state.playerNames = Array.from({ length: n }, (_, i) => `Player ${i + 1}`);
@@ -2547,7 +2737,10 @@ function startRound() {
     state.currentSet += 1;
     // Reset "once per set" abilities
     state.highRollerUsed = false;
+    state.highRollerGuesses = [];
+    state.highRollerGuessRound = null;
     state.executionerUsed = false;
+    state.hunterUsed = false;
   }
 
   const startBtn = $("start-round-btn");
@@ -2631,6 +2824,7 @@ function startRound() {
       lastUpdate: Date.now()
     };
     updates[`rooms/${code}/roundGuesses`] = {};
+    updates[`rooms/${code}/roundRoleActions`] = {};
     update(ref(window.db), updates);
     // UI will be opened by applyRoundStateFromFirebase() from the Firebase update.
     return;
@@ -2793,7 +2987,60 @@ function clearRoleModalSkillInfo() {
   el.classList.add("hidden");
 }
 
+function hideRoleModalHighRollerAnnounce() {
+  const el = $("role-modal-highroller-announce");
+  if (el) {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
+
+/** Clears pending guess hint state and the cyan line under role-modal-instruction. */
+function resetRoleModalFlowHints() {
+  state.guessModalRoleHint = null;
+  const post = $("role-modal-post-instruction-hint");
+  if (post) {
+    post.textContent = "";
+    post.classList.add("hidden");
+  }
+}
+
+/** Same copy as guess-skill-info: show under role-modal-instruction and carry into guess modal. */
+function armGuessModalRoleHint(text) {
+  const t = text != null ? String(text).trim() : "";
+  state.guessModalRoleHint = t || null;
+  const el = $("role-modal-post-instruction-hint");
+  if (!el) return;
+  if (state.guessModalRoleHint) {
+    el.textContent = state.guessModalRoleHint;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
+
+function consumeGuessModalHintIntoSkill(skillEl) {
+  const hint = state.guessModalRoleHint;
+  state.guessModalRoleHint = null;
+  const post = $("role-modal-post-instruction-hint");
+  if (post) {
+    post.textContent = "";
+    post.classList.add("hidden");
+  }
+  if (!skillEl) return;
+  if (hint) {
+    skillEl.textContent = hint;
+    skillEl.classList.remove("hidden");
+  } else {
+    skillEl.textContent = "";
+    skillEl.classList.add("hidden");
+  }
+}
+
 function openInformationRoleModal(roleName, infoHtml) {
+  const okInf = $("role-ok-guess-btn");
+  if (okInf) okInf.classList.add("hidden");
   const roleObj = roles.find((r) => r.role === roleName);
   dom.roleModalTitle.textContent = roleName;
   dom.roleModalDesc.innerHTML = (roleObj?.desc ? `<p class="mb-3 text-zinc-200 text-sm">${escapeHtml(roleObj.desc)}</p>` : "") + infoHtml;
@@ -2809,6 +3056,9 @@ function openInformationRoleModal(roleName, infoHtml) {
   const tbtn = $("role-trigger-btn");
   if (tbtn) tbtn.classList.add("hidden");
   clearRoleModalSkillInfo();
+  hideRoleModalHighRollerAnnounce();
+  resetRoleModalFlowHints();
+  setRoleModalCornerCloseVisible(true);
   show(dom.roleModal);
 }
 
@@ -2817,6 +3067,8 @@ function openRoleActionModal(roleName) {
     openEmpathWaitingModal();
     return;
   }
+  setRoleModalCornerCloseVisible(false);
+  state.roleModalHideFootInstruction = false;
   const roleObj = roles.find((r) => r.role === roleName);
   const colorName = roleToColor[roleName];
   const abilityMap = {
@@ -2842,9 +3094,15 @@ function openRoleActionModal(roleName) {
     ${usageText ? `<div class="text-xs text-amber-300 text-center mt-1">${usageText}</div>` : ""}
   `;
   dom.roleModalDesc.innerHTML = "";
+  hideRoleModalHighRollerAnnounce();
+  resetRoleModalFlowHints();
   setRoleModalSkillInfo(roleName);
   if (roleName === "The High Roller") {
-    dom.roleModalDesc.innerHTML = `<p class="text-xs text-amber-300 mt-2">Current announced color: ${state.announcedColor || "-"}</p>`;
+    const hrAnn = $("role-modal-highroller-announce");
+    if (hrAnn) {
+      hrAnn.textContent = `Current announced color: ${state.announcedColor || "-"}`;
+      hrAnn.classList.remove("hidden");
+    }
   }
   dom.roleModalResult.textContent = "";
   const rwrap = $("role-modal-result-wrap");
@@ -2858,22 +3116,71 @@ function openRoleActionModal(roleName) {
   }
   const abtn = $("role-apply-btn");
   if (abtn) abtn.classList.remove("hidden");
+  const okGuess0 = $("role-ok-guess-btn");
+  if (okGuess0) okGuess0.classList.add("hidden");
+  removeRoleLaterBtn();
   state.roleSelection = [];
   state.rolePendingApply = null;
   state.roleRequiredCount = 0;
 
   const actionKey = roleActionByRoleName[roleName];
-  // Ensure modal is visible before measuring/rendering circle, prevents first-frame cracked layout.
+       // Ensure modal is visible before measuring/rendering circle, prevents first-frame cracked layout.
   show(dom.roleModal);
+  if (actionKey === "siphon" && state.siphonUsed) {
+    showRoleActionAlreadyConsumed("The Siphon");
+    return;
+  }
+  if (actionKey === "highroller" && state.highRollerUsed) {
+    showRoleActionAlreadyConsumed("The High Roller");
+    return;
+  }
+  if (actionKey === "executioner" && state.executionerUsed) {
+    showRoleActionAlreadyConsumed("The Executioner");
+    return;
+  }
+  if (actionKey === "soulswapper" && state.soulSwapperUsed) {
+    showRoleActionAlreadyConsumed("The Soul Swapper");
+    return;
+  }
+  if (actionKey === "hunter" && state.hunterUsed) {
+    showRoleActionAlreadyConsumed("The Hunter");
+    return;
+  }
+  if (actionKey === "alchemist") {
+    if (state.alchemistUsed) {
+      showRoleActionAlreadyConsumed("The Alchemist");
+      return;
+    }
+    if (state.playerScores[state.myId - 1] >= -100) {
+      showRoleActionAlreadyConsumed(
+        "The Alchemist",
+        `Your score must be below −100 (more negative than −100) to unlock Gold Tarnish. Current: ${state.playerScores[state.myId - 1]}`
+      );
+      return;
+    }
+    const goldRoleEarly = "The High Roller";
+    const goldIdxEarly = state.assignedRoles.findIndex((r) => r === goldRoleEarly);
+    if (goldIdxEarly < 0) {
+      showRoleActionAlreadyConsumed("The Alchemist", "No Gold player in game.");
+      return;
+    }
+  }
+
   if (actionKey === "oracle") {
     state.roleRequiredCount = 1;
     state.rolePendingApply = (sel) => {
       const p = sel[0];
       const targetColor = roleToColor[state.assignedRoles[p - 1]];
       const cat = colorCategory[targetColor] || "DARK";
-      state.playerScores[p - 1] -= 10;
-      state.playerScores[state.myId - 1] += 10;
+      state.lastOracleTarget = p;
+      if (state.onlineMode) {
+        pushRoundRoleActionOnline({ type: "oracle", target: p });
+      } else {
+        state.playerScores[p - 1] -= 10;
+        state.playerScores[state.myId - 1] += 10;
+      }
       dom.roleModalResult.textContent = `P${p} is ${cat}. You steal 10 points.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
@@ -2884,17 +3191,26 @@ function openRoleActionModal(roleName) {
       const cat = colorCategory[roleToColor[state.assignedRoles[p - 1]]] || "DARK";
       let dmg = cat === "LIGHT" ? 10 : 5;
       if (p === state.myId) dmg = 15;
-      state.playerScores[p - 1] -= dmg;
-      dom.roleModalResult.textContent = `P${p} is ${cat}. Penalty -${dmg}.`;
+      state.lastCorrupterTarget = p;
+      if (state.onlineMode) {
+        pushRoundRoleActionOnline({ type: "corrupter", target: p, cat, dmg });
+      } else {
+        state.playerScores[p - 1] -= dmg;
+      }
+      dom.roleModalResult.textContent = `P${p} is ${cat}. Penalty applied to P${p}: -${dmg}.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
   } else if (actionKey === "illuminator") {
     state.roleRequiredCount = 1;
+    state.roleModalHideFootInstruction = true;
     state.rolePendingApply = (sel) => {
       const p = sel[0];
       const cat = colorCategory[roleToColor[state.assignedRoles[p - 1]]] || "DARK";
+      state.lastIlluminatorTarget = p;
       dom.roleModalResult.textContent = `P${p} is in ${cat} category.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
@@ -2905,7 +3221,10 @@ function openRoleActionModal(roleName) {
       const strike = Math.random() < 0.5 ? a : b;
       const cat = colorCategory[roleToColor[state.assignedRoles[strike - 1]]] || "DARK";
       if (cat === "LIGHT") state.playerScores[strike - 1] -= 30;
+      state.hunterUsed = true;
+      state.lastHunterStrikeSeat = strike;
       dom.roleModalResult.textContent = `Hunter struck P${strike}. ${cat === "LIGHT" ? "-30 applied." : "No damage (not Light)."}`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(2, true)));
@@ -2927,58 +3246,45 @@ function openRoleActionModal(roleName) {
         dom.roleModalResult.textContent = `P${t} is not DARK. Choose DARK player.`;
         return;
       }
-      if (state.siphonUsed) {
-        dom.roleModalResult.textContent = `Siphon already used once this game.`;
-        return;
-      }
       state.playerScores[state.myId - 1] += state.playerScores[t - 1];
       state.playerScores[t - 1] = 0;
       state.siphonUsed = true;
+      state.lastSiphonTarget = t;
       dom.roleModalResult.textContent = `Stole all points from P${t}.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
     const tbtn = $("role-trigger-btn");
     if (tbtn) tbtn.classList.add("hidden");
   } else if (actionKey === "highroller") {
-    if (state.highRollerUsed) {
-      dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">High Roller already used this set.</p>`;
-      closeRoleModalThenOpenGuess();
-      return;
-    }
     state.roleRequiredCount = 2;
     state.rolePendingApply = (sel) => {
       const [g1, g2] = sel;
       state.highRollerGuesses = [g1, g2];
       state.highRollerUsed = true;
+      state.highRollerGuessRound = state.currentRound;
       state.playerGuess = g1;
       state.playerScores[g1 - 1] -= 10;
       state.playerScores[g2 - 1] -= 10;
       dom.roleModalResult.textContent = `Double guess selected: P${g1} and P${g2}. Each gets -10. If correct, extra -5.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(2, true)));
   } else if (actionKey === "executioner") {
-    if (state.executionerUsed) {
-      dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">Executioner already used this set.</p>`;
-      closeRoleModalThenOpenGuess();
-      return;
-    }
     state.roleRequiredCount = 1;
     state.rolePendingApply = (sel) => {
       const t = sel[0];
       state.violetTargetId = t;
       state.executionerUsed = true;
+      state.lastExecutionerMark = t;
       dom.roleModalResult.textContent = `Death Mark placed on P${t}. If they hit -50, they're eliminated. If they hit +50, you're eliminated.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
   } else if (actionKey === "soulswapper") {
-    if (state.soulSwapperUsed) {
-      dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">Soul Swapper already used this game.</p>`;
-      closeRoleModalThenOpenGuess();
-      return;
-    }
     state.roleRequiredCount = 1;
     state.rolePendingApply = (sel) => {
       const t = sel[0];
@@ -2986,40 +3292,29 @@ function openRoleActionModal(roleName) {
       state.playerScores[state.myId - 1] = state.playerScores[t - 1];
       state.playerScores[t - 1] = temp;
       state.soulSwapperUsed = true;
+      state.lastSoulSwapTarget = t;
       dom.roleModalResult.textContent = `Swapped scores with P${t}.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
       closeRoleModalThenOpenGuess();
     };
     requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
   } else if (actionKey === "alchemist") {
-    if (state.alchemistUsed) {
-      dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">Alchemist already used this game.</p>`;
-      closeRoleModalThenOpenGuess();
-      return;
-    }
-    if (state.playerScores[state.myId - 1] > -100) {
-      dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">Your score must be below -100 to use this ability. Current: ${state.playerScores[state.myId - 1]}</p>`;
-      closeRoleModalThenOpenGuess();
-      return;
-    }
-    // Find the Gold player
     const goldRole = "The High Roller";
-    const goldIdx = state.assignedRoles.findIndex(r => r === goldRole);
-    if (goldIdx < 0) {
-      dom.roleModalDesc.innerHTML = `<p class="text-rose-300 text-sm">No Gold player in game.</p>`;
-      closeRoleModalThenOpenGuess();
-      return;
-    }
+    const goldIdx = state.assignedRoles.findIndex((r) => r === goldRole);
     const goldPlayer = goldIdx + 1;
     state.roleRequiredCount = 0;
     dom.roleModalDesc.innerHTML = `
-      <p class="text-sm text-zinc-200 mb-3">Gold player is P${goldPlayer}.</p>
-      <p class="text-xs text-zinc-300 mb-2">Choose an option:</p>
-      <div class="flex gap-2">
-        <button onclick="alchemistForceNegative()" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs">Force Gold -100</button>
-        <button onclick="alchemistGuessGold()" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs">Guess Gold</button>
+      <p class="text-sm text-zinc-200 mb-2">The Gold (High Roller) seat is <span class="text-amber-300 font-bold">P${goldPlayer}</span>. Your score is below −100 — choose one path:</p>
+      <p class="text-xs text-zinc-400 mb-3">Guess Gold: tap the seat you think is Gold on the table, then Apply. Correct seat → Gold −200, you +200. Wrong seat → you −200, Gold +100.</p>
+      <div class="flex flex-col sm:flex-row flex-wrap gap-2 justify-center">
+        <button type="button" onclick="alchemistSkipAbility()" class="px-3 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-xs font-bold">Skip ability (guess only)</button>
+        <button type="button" onclick="alchemistForceNegative()" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold">Force Gold −100</button>
+        <button type="button" onclick="alchemistStartGuessGoldSeatPick()" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold">Pick Gold seat</button>
       </div>
     `;
-    state.alchemistUsed = true;
+    dom.roleModalResult.textContent = "";
+    const rwrapAl = $("role-modal-result-wrap");
+    if (rwrapAl) rwrapAl.classList.add("hidden");
     const abtnAl = $("role-apply-btn");
     if (abtnAl) abtnAl.classList.add("hidden");
     dom.roleModalCircle.classList.add("hidden");
@@ -3035,9 +3330,12 @@ function openRoleActionModal(roleName) {
     closeRoleModalThenOpenGuess();
   }
   
-  // Add "Use Role Later" button for once-per-set/game roles
+  // Add "Use Role Later" button for once-per-set/game roles (not Alchemist: custom buttons)
   const usageRuleText = roleByColor[roleToColor[roleName]]?.usage || "";
-  if (usageRuleText.includes("Once per Set") || usageRuleText.includes("Once per Game")) {
+  if (
+    actionKey !== "alchemist" &&
+    (usageRuleText.includes("Once per Set") || usageRuleText.includes("Once per Game"))
+  ) {
     setTimeout(() => {
       const abtn = $("role-apply-btn");
       if (abtn && abtn.parentElement && !$("role-later-btn")) {
@@ -3057,6 +3355,10 @@ function openRoleActionModal(roleName) {
 }
 
 function closeRoleModalThenOpenGuess() {
+  removeRoleLaterBtn();
+  state.roleModalHideFootInstruction = false;
+  const okGuess = $("role-ok-guess-btn");
+  if (okGuess) okGuess.classList.add("hidden");
   const abtn = $("role-apply-btn");
   if (abtn) abtn.classList.add("hidden");
   const tbtn = $("role-trigger-btn");
@@ -3065,8 +3367,10 @@ function closeRoleModalThenOpenGuess() {
   if (instr) instr.classList.add("hidden");
   dom.roleModalCircle.classList.add("hidden");
   syncMyScore();
+  setRoleModalCornerCloseVisible(false);
   hide(dom.roleModal);
   clearRoleModalSkillInfo();
+  hideRoleModalHighRollerAnnounce();
   openGuessModal();
 }
 
@@ -3075,39 +3379,78 @@ function triggerRoleClaim() {
   dom.roleModalResult.textContent = `Siphon armed. Select DARK player and click Apply Role.`;
 }
 
-function alchemistForceNegative() {
-  const goldRole = "The High Roller";
-  const goldIdx = state.assignedRoles.findIndex(r => r === goldRole);
-  if (goldIdx >= 0) {
-    state.playerScores[goldIdx] -= 100;
-    dom.roleModalResult.textContent = `Gold player forced to -100 more.`;
-  }
-  setTimeout(() => {
-    hide(dom.roleModal);
-    openGuessModal();
-  }, 1500);
+function alchemistSkipAbility() {
+  removeRoleLaterBtn();
+  closeRoleModalThenOpenGuess();
 }
 
-function alchemistGuessGold() {
+function alchemistStartGuessGoldSeatPick() {
   const goldRole = "The High Roller";
-  const goldIdx = state.assignedRoles.findIndex(r => r === goldRole);
-  if (goldIdx >= 0) {
-    const goldPlayer = goldIdx + 1;
-    if (state.holderId === goldPlayer) {
-      // Correct guess
-      state.playerScores[goldPlayer] -= 100;
-      state.playerScores[state.myId - 1] = 200;
-      dom.roleModalResult.textContent = `Correct! Gold -100, your score set to 200.`;
-    } else {
-      // Incorrect guess
-      state.playerScores[state.myId - 1] -= 100;
-      state.playerScores[goldPlayer] += 100;
-      dom.roleModalResult.textContent = `Wrong! You get -100 more, Gold gets +100.`;
+  const goldIdx = state.assignedRoles.findIndex((r) => r === goldRole);
+  if (goldIdx < 0) return;
+  const goldPlayer = goldIdx + 1;
+  removeRoleLaterBtn();
+  dom.roleModalDesc.innerHTML = `<p class="text-sm text-zinc-200 mb-2">Tap the seat you believe is <span class="text-amber-300 font-bold">The High Roller (Gold)</span>, then <span class="text-cyan-300">Apply Role</span>.</p>`;
+  state.roleRequiredCount = 1;
+  state.roleSelection = [];
+  state.roleModalHideFootInstruction = false;
+  const abtn = $("role-apply-btn");
+  if (abtn) abtn.classList.remove("hidden");
+  dom.roleModalCircle.classList.remove("hidden");
+  const instr = $("role-modal-instruction");
+  if (instr) {
+    instr.classList.remove("hidden");
+    instr.textContent = "Select 1 seat, then Apply Role.";
+  }
+  const rw = $("role-modal-result-wrap");
+  if (rw) {
+    rw.classList.add("hidden");
+    dom.roleModalResult.textContent = "";
+  }
+  state.rolePendingApply = (sel) => {
+    const pick = sel[0];
+    if (pick !== goldPlayer) {
+      state.alchemistUsed = true;
+      state.playerScores[state.myId - 1] -= 200;
+      state.playerScores[goldPlayer - 1] += 100;
+      state.lastAlchemistSummary = `Alchemist already used. Wrong pick (P${pick}): you −200, Gold +100.`;
+      dom.roleModalResult.textContent = `P${pick} is not Gold. You −200, Gold (P${goldPlayer}) +100.`;
+      armGuessModalRoleHint(dom.roleModalResult.textContent);
+      const rwrap = $("role-modal-result-wrap");
+      if (rwrap) rwrap.classList.remove("hidden");
+      syncRoleResultVisibility();
+      setTimeout(() => closeRoleModalThenOpenGuess(), 1400);
+      return;
     }
+    state.alchemistUsed = true;
+    state.playerScores[goldPlayer - 1] -= 200;
+    state.playerScores[state.myId - 1] += 200;
+    state.lastAlchemistSummary = `Alchemist already used. Correct Gold pick (P${goldPlayer}): Gold −200, you +200.`;
+    dom.roleModalResult.textContent = `Correct — Gold P${goldPlayer} −200, you +200.`;
+    armGuessModalRoleHint(dom.roleModalResult.textContent);
+    const rwrap = $("role-modal-result-wrap");
+    if (rwrap) rwrap.classList.remove("hidden");
+    syncRoleResultVisibility();
+    setTimeout(() => closeRoleModalThenOpenGuess(), 1400);
+  };
+  requestAnimationFrame(() => requestAnimationFrame(() => renderRoleSelectionCircle(1, true)));
+}
+
+function alchemistForceNegative() {
+  const goldRole = "The High Roller";
+  const goldIdx = state.assignedRoles.findIndex((r) => r === goldRole);
+  if (goldIdx >= 0) {
+    state.playerScores[goldIdx] -= 100;
+    state.alchemistUsed = true;
+    state.lastAlchemistSummary = "Alchemist already used. You forced Gold −100.";
+    dom.roleModalResult.textContent = `Gold player forced −100 more.`;
+    armGuessModalRoleHint(dom.roleModalResult.textContent);
+    const rwrap = $("role-modal-result-wrap");
+    if (rwrap) rwrap.classList.remove("hidden");
+    syncRoleResultVisibility();
   }
   setTimeout(() => {
-    hide(dom.roleModal);
-    openGuessModal();
+    closeRoleModalThenOpenGuess();
   }, 1500);
 }
 
@@ -3123,6 +3466,11 @@ function showRoleDetailPopup(roleName) {
 }
 
 function openEmpathWaitingModal() {
+  setRoleModalCornerCloseVisible(false);
+  hideRoleModalHighRollerAnnounce();
+  resetRoleModalFlowHints();
+  const okEmp = $("role-ok-guess-btn");
+  if (okEmp) okEmp.classList.add("hidden");
   state.empathPeekTarget = null;
   state._empathGuessScheduled = false;
   dom.roleModalTitle.innerHTML = `
@@ -3181,8 +3529,10 @@ function checkEmpathTargetGuess(target) {
     if (!state._empathGuessScheduled) {
       state._empathGuessScheduled = true;
       setTimeout(() => {
+        setRoleModalCornerCloseVisible(false);
         hide(dom.roleModal);
         clearRoleModalSkillInfo();
+        armGuessModalRoleHint(`Empath: P${target} guessed P${targetGuess}.`);
         openGuessModal();
       }, 600);
     }
@@ -3203,7 +3553,15 @@ function renderRoleSelectionCircle(requiredCount, selectable) {
     </div>
   `;
   const instr = $("role-modal-instruction");
-  if (instr) instr.textContent = `Select ${requiredCount} player(s), then click Apply Role.`;
+  if (instr) {
+    if (state.roleModalHideFootInstruction) {
+      instr.classList.add("hidden");
+      instr.textContent = "";
+    } else {
+      instr.classList.remove("hidden");
+      instr.textContent = `Select ${requiredCount} player(s), then click Apply Role.`;
+    }
+  }
 
   // Ensure layout has settled before measuring to prevent first-render misplacement.
   const rect = circle.getBoundingClientRect();
@@ -3345,19 +3703,20 @@ function showScoutInfo() {
 }
 
 function openGuessModal() {
-  // Set color for modal
   const announcedHex = colorHex[state.announcedColor] || "#22c55e";
+  const colorChipClass =
+    "guess-announce-chip flex-none min-w-0 text-center font-bold rounded-xl sm:rounded-2xl px-2.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 truncate max-w-[min(72vw,15rem)] sm:max-w-[16rem] border border-white/15 shadow-md";
+  const catChipClass =
+    "guess-announce-chip shrink-0 whitespace-nowrap text-center font-bold rounded-xl sm:rounded-2xl px-3 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 border border-white/15 shadow-md text-xs sm:text-sm md:text-base";
   dom.modalColor.style.background = announcedHex;
   dom.modalColor.style.color = getContrastingText(announcedHex);
   dom.modalColor.textContent = state.announcedColor;
+  dom.modalColor.className = colorChipClass;
+
   const catEl = $("modal-announced-category");
-  const chipColor =
-    "text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 max-w-[min(100%,14rem)] truncate";
-  const chipCat =
-    "text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 min-w-0 sm:min-w-[7rem] max-w-[min(100%,12rem)]";
   if (catEl) {
     const cat = colorCategory[state.announcedColor] || "";
-    catEl.className = chipCat;
+    catEl.className = catChipClass;
     if (cat === "LIGHT") {
       catEl.textContent = "☀ LIGHT";
       const bg = "#f59e0b";
@@ -3378,12 +3737,19 @@ function openGuessModal() {
       else catEl.classList.remove("hidden");
     }
   }
-  dom.modalColor.className = chipColor;
 
   // High Roller can skip guess button not used here; keep hidden by default.
   const myRole = state.assignedRoles[state.myId - 1];
-  const lockGold = myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2;
-  state.playerGuess = lockGold ? state.highRollerGuesses[0] : null;
+  const lockGold =
+    myRole === "The High Roller" &&
+    state.highRollerUsed &&
+    state.highRollerGuesses.length === 2 &&
+    state.highRollerGuessRound === state.currentRound;
+  if (!lockGold && myRole === "The High Roller") {
+    state.playerGuess = null;
+  } else {
+    state.playerGuess = lockGold ? state.highRollerGuesses[0] : state.playerGuess;
+  }
   const skipBtn = $("skip-guess-btn");
   if (skipBtn) skipBtn.classList.add("hidden");
 
@@ -3392,11 +3758,7 @@ function openGuessModal() {
   if (lockGold && instr) {
     instr.textContent = `High Roller locked picks: P${state.highRollerGuesses[0]} and P${state.highRollerGuesses[1]}. Submit to continue.`;
   }
-  const skill = $("guess-skill-info");
-  if (skill) {
-    skill.textContent = "";
-    skill.classList.add("hidden");
-  }
+  consumeGuessModalHintIntoSkill($("guess-skill-info"));
   show(dom.modal);
   // Modal was hidden: clientWidth was 0 if we laid out seats before show — measure after paint.
   requestAnimationFrame(() => {
@@ -3427,7 +3789,11 @@ function renderMiniCircle(retry = 0) {
   const cx = size / 2;
   const cy = size / 2;
   const myRole = state.assignedRoles[state.myId - 1];
-  const lockGold = myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2;
+  const lockGold =
+    myRole === "The High Roller" &&
+    state.highRollerUsed &&
+    state.highRollerGuesses.length === 2 &&
+    state.highRollerGuessRound === state.currentRound;
   const lockedSet = new Set(lockGold ? state.highRollerGuesses : []);
   for (let i = 0; i < state.numPlayers; i++) {
     const seatId = i + 1;
@@ -3869,7 +4235,10 @@ function calculateRound() {
       round: state.currentRound,
       roleToColor,
       colorCategory,
-      myId: state.myId
+      myId: state.myId,
+      manualRoleActions: normalizeRoundRoleActionsMap(
+        state.roundRoleActions || window._lastRoomData?.roundRoleActions || {}
+      )
     });
 
     onlineRoleEvents = r.roleEventsByPlayer;
@@ -4145,22 +4514,22 @@ function showFinalBoard(reason = "") {
     const pname = String(state.playerNames?.[i - 1] || `Player ${i}`);
     const score = Array.isArray(state.playerScores) ? (state.playerScores[i - 1] ?? 0) : (i === state.myId ? state.myScore : 0);
     html += `
-      <div class="flex items-center gap-3 sm:gap-6 bg-zinc-800/90 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border ${i===state.myId?'border-yellow-400':''}">
-        <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-3xl font-black shrink-0" style="background:${roleColorMap[role]}; color:${getContrastingText(roleColorMap[role])}">
+      <div class="flex items-center gap-2 sm:gap-4 md:gap-6 bg-zinc-800/90 rounded-2xl sm:rounded-3xl p-3 sm:p-6 border max-w-full min-w-0 overflow-hidden ${i===state.myId?'border-yellow-400':'border-transparent'}">
+        <div class="w-10 h-10 sm:w-16 sm:h-16 rounded-lg sm:rounded-2xl flex items-center justify-center text-base sm:text-3xl font-black shrink-0" style="background:${roleColorMap[role]}; color:${getContrastingText(roleColorMap[role])}">
           P${i}
         </div>
-        <div class="flex-1 min-w-0">
-          <div class="text-lg sm:text-2xl truncate">${pname}</div>
-          <div class="text-[10px] sm:text-xs text-zinc-400">${role}</div>
+        <div class="flex-1 min-w-0 overflow-hidden">
+          <div class="text-sm sm:text-xl md:text-2xl font-semibold truncate">${pname}</div>
+          <div class="text-[9px] sm:text-xs text-zinc-400 truncate">${role}</div>
         </div>
-        ${i - 1 === winnerIdx ? `<div class="px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg sm:rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[10px] sm:text-xs font-bold shrink-0">WINNER</div>` : ""}
-        <div class="text-2xl sm:text-4xl font-black text-emerald-400 shrink-0">${score}</div>
+        ${i - 1 === winnerIdx ? `<div class="px-1 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[8px] sm:text-xs font-bold shrink-0 whitespace-nowrap leading-tight">WINNER</div>` : ""}
+        <div class="text-sm sm:text-3xl md:text-4xl font-black tabular-nums text-emerald-400 shrink-0 text-right leading-tight whitespace-nowrap">${score}</div>
       </div>`;
   }
   dom.status.innerHTML = `
-    <h2 class="text-2xl sm:text-5xl font-bold text-emerald-400 text-center mb-6 sm:mb-10">${formatGameEndTitle(reason)}</h2>
-    ${reason ? `<div class="text-center text-rose-300 mb-4 text-sm sm:text-base">${reason}</div>` : ""}
-    <div class="space-y-6 max-w-3xl mx-auto">${html}</div>
+    <h2 class="text-xl sm:text-5xl font-bold text-emerald-400 text-center mb-4 sm:mb-10 leading-tight px-1">${formatGameEndTitle(reason)}</h2>
+    ${reason ? `<div class="text-center text-rose-300 mb-3 sm:mb-4 text-xs sm:text-base px-2">${reason}</div>` : ""}
+    <div class="space-y-3 sm:space-y-6 max-w-3xl mx-auto w-full px-1 sm:px-2">${html}</div>
     <div class="mt-12 flex flex-col sm:flex-row flex-wrap justify-center items-stretch gap-4 max-w-3xl mx-auto px-2">
       <button onclick="startNewSet()" class="px-8 sm:px-12 py-5 sm:py-6 bg-emerald-600 hover:bg-emerald-700 rounded-3xl text-lg sm:text-xl font-bold shadow-xl transition">NEW SET</button>
       <button onclick="showHistoryModal()" class="px-8 sm:px-12 py-5 sm:py-6 bg-cyan-700 hover:bg-cyan-800 rounded-3xl text-lg sm:text-xl font-bold transition">HISTORY</button>
@@ -4386,25 +4755,44 @@ function roundLightDarkTeamsHtml(item) {
   };
   const light = [];
   const dark = [];
+  let lightSum = 0;
+  let darkSum = 0;
   const n = item.roles?.length || 0;
+  const roundScore = (p) => {
+    const v = item.scores?.[p - 1];
+    return typeof v === "number" && Number.isFinite(v) ? v : 0;
+  };
   for (let p = 1; p <= n; p++) {
     const role = item.roles[p - 1];
     const c = roleToColor[role] || "";
     const cat = colorCategory[c] || "DARK";
     const ic = iconByColor[c] || "✦";
-    const badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-zinc-800 border border-zinc-600 text-[10px] font-bold">${ic} P${p}</span>`;
-    if (cat === "LIGHT") light.push(badge);
-    else dark.push(badge);
+    const sc = roundScore(p);
+    const badge = `<span class="inline-flex items-center gap-0.5 px-1 py-0.5 sm:px-1.5 rounded bg-zinc-800 border border-zinc-600 text-[8px] sm:text-[10px] font-bold whitespace-nowrap">${ic} P${p}</span>`;
+    if (cat === "LIGHT") {
+      light.push(badge);
+      lightSum += sc;
+    } else {
+      dark.push(badge);
+      darkSum += sc;
+    }
   }
+  const fmt = (x) => Math.round(x * 10) / 10;
   return `
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-      <div class="border border-amber-400/30 rounded-xl p-2 bg-amber-500/5 min-h-[3rem]">
-        <div class="text-[10px] text-amber-300 font-bold mb-1">☀ Light</div>
-        <div class="flex flex-wrap gap-1">${light.join("") || "—"}</div>
+    <div class="grid grid-cols-2 gap-1.5 sm:gap-2 mt-3 min-w-0">
+      <div class="border border-amber-400/30 rounded-lg sm:rounded-xl p-1.5 sm:p-2 bg-amber-500/5 min-h-[2.75rem] min-w-0">
+        <div class="flex items-center justify-between gap-1 mb-0.5 min-w-0">
+          <span class="text-[9px] sm:text-[10px] text-amber-300 font-bold truncate">☀ Light</span>
+          <span class="shrink-0 tabular-nums px-1.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/35 text-[9px] sm:text-[10px] font-black text-amber-100">Σ ${fmt(lightSum)}</span>
+        </div>
+        <div class="flex flex-wrap gap-0.5 sm:gap-1 min-w-0">${light.join("") || "—"}</div>
       </div>
-      <div class="border border-violet-400/30 rounded-xl p-2 bg-violet-500/5 min-h-[3rem]">
-        <div class="text-[10px] text-violet-300 font-bold mb-1">☾ Dark</div>
-        <div class="flex flex-wrap gap-1">${dark.join("") || "—"}</div>
+      <div class="border border-violet-400/30 rounded-lg sm:rounded-xl p-1.5 sm:p-2 bg-violet-500/5 min-h-[2.75rem] min-w-0">
+        <div class="flex items-center justify-between gap-1 mb-0.5 min-w-0">
+          <span class="text-[9px] sm:text-[10px] text-violet-300 font-bold truncate">☾ Dark</span>
+          <span class="shrink-0 tabular-nums px-1.5 py-0.5 rounded-md bg-violet-500/20 border border-violet-400/35 text-[9px] sm:text-[10px] font-black text-violet-100">Σ ${fmt(darkSum)}</span>
+        </div>
+        <div class="flex flex-wrap gap-0.5 sm:gap-1 min-w-0">${dark.join("") || "—"}</div>
       </div>
     </div>`;
 }
@@ -4432,7 +4820,7 @@ function showRoundDetailsModal(roundIndex) {
         return { used: true, picks: `Neighbors P${il.left} & P${il.right}; same category: ${same}` };
       }
       if (ev.oracle?.target) return { used: true, picks: `Target P${ev.oracle.target}` };
-      if (ev.corrupter?.target) return { used: true, picks: `P${ev.corrupter.target}` };
+      if (ev.corrupter?.target) return { used: true, picks: `Target P${ev.corrupter.target}` };
       if (ev.hunter?.strike) return { used: true, picks: `A/B P${ev.hunter.a}, P${ev.hunter.b} → strike P${ev.hunter.strike}` };
       if (ev.highroller) return { used: true, picks: `P${ev.highroller.g1 ?? "-"}, P${ev.highroller.g2 ?? "-"}` };
       if (ev.siphon?.target) return { used: true, picks: `P${ev.siphon.target}` };
@@ -4454,7 +4842,11 @@ function showRoundDetailsModal(roundIndex) {
       return { used: true, picks: passiveSkillPickDetails(seat, role, item) };
     }
     if (role === "The Oracle" && reason.includes("Oracle stole")) return { used: true, picks: m ? `P${m[1]}` : "—" };
-    if (role === "The Corrupter" && reason.includes("Corrupter hit")) return { used: true, picks: m ? `P${m[1]}` : "—" };
+    if (role === "The Corrupter") {
+      const hit = reason.match(/Corrupter hit P(\d+)/i) || reason.match(/hit P(\d+)/i);
+      if (hit) return { used: true, picks: `Target P${hit[1]}` };
+      if (reason.trim()) return { used: true, picks: "Identify used" };
+    }
     if (role === "The Hunter" && reason.includes("Hunter struck")) return { used: true, picks: m ? `P${m[1]}` : "—" };
     if (role === "The High Roller" && reason.includes("High Roller targeted")) return { used: true, picks: "2 picks used" };
     if (PER_ROUND_SKILL_ROLES.has(role)) return { used: true, picks: "—" };
@@ -4521,7 +4913,8 @@ function showRoundDetailsModal(roundIndex) {
       const restSkill = skillTotal - own.pts - others.pts;
       const forceSkillY = PER_ROUND_SKILL_ROLES.has(role);
       const showSkillY = forceSkillY || sInfo.used;
-      const pickStr = forceSkillY ? (sInfo.picks || "—") : (sInfo.used ? sInfo.picks : "—");
+      const pickRaw = forceSkillY ? (sInfo.picks || "—") : (sInfo.used ? sInfo.picks : "—");
+      const pickStr = pickRaw === "—" ? "" : pickRaw;
       const ownLine =
         own.pts !== 0
           ? `Own role: ${own.label || "ability"} — ${own.pts >= 0 ? "+" : ""}${Math.round(own.pts * 10) / 10} pts`
@@ -4597,13 +4990,13 @@ function showRoundDetailsModal(roundIndex) {
     const anySg = sgUsedFlags.some(Boolean);
 
     box.innerHTML = `
-      <div class="mb-3">
-        <div class="text-[10px] text-zinc-400">Set ${item.set ?? "?"} • Round ${item.round ?? "?"}</div>
-        <div class="text-lg font-bold text-amber-300">Announced: ${announced} <span class="text-zinc-300 font-normal">(${holderName})</span></div>
+      <div class="mb-2 sm:mb-3 min-w-0">
+        <div class="text-[9px] sm:text-[10px] text-zinc-400">Set ${item.set ?? "?"} • Round ${item.round ?? "?"}</div>
+        <div class="text-sm sm:text-lg font-bold text-amber-300 leading-snug break-words">Announced: ${announced} <span class="text-zinc-300 font-normal">(${holderName})</span></div>
       </div>
 
-      <div class="overflow-auto border border-zinc-700 rounded-2xl">
-        <table class="w-full text-[9px] md:text-[11px]">
+      <div class="overflow-x-auto border border-zinc-700 rounded-xl sm:rounded-2xl -mx-0.5 sm:mx-0">
+        <table class="w-full min-w-[520px] text-[8px] sm:text-[10px] md:text-[11px]">
           <thead class="bg-zinc-800/80 text-zinc-100">
             <tr>
               <th class="text-left py-2 px-1">players</th>
@@ -4795,8 +5188,14 @@ function showSetCompleteStatusPanel() {
 }
 
 function closeRoleModalOnly() {
+  removeRoleLaterBtn();
+  const okGuess = $("role-ok-guess-btn");
+  if (okGuess) okGuess.classList.add("hidden");
+  setRoleModalCornerCloseVisible(false);
   hide(dom.roleModal);
   clearRoleModalSkillInfo();
+  hideRoleModalHighRollerAnnounce();
+  resetRoleModalFlowHints();
 }
 
 function startNewSet() {
@@ -4805,7 +5204,10 @@ function startNewSet() {
   state.currentRound = 0;
   state.roundInProgress = false;
   state.highRollerUsed = false;
+  state.highRollerGuesses = [];
+  state.highRollerGuessRound = null;
   state.executionerUsed = false;
+  state.hunterUsed = false;
   state.playerGuess = null;
   state.prevRoundGuesses = [];
   state.prevAnnouncedColor = null;
