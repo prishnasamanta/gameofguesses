@@ -483,9 +483,9 @@ SET 1 • ROUND 0 / ?
 <div id="guess-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
 <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-yellow-400/40 modal">
 <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ANNOUNCED COLOR</div>
-<div class="flex flex-wrap justify-center items-stretch gap-3 mb-4">
-  <div id="modal-announced-color" class="text-3xl md:text-4xl font-bold text-center px-6 py-3 rounded-2xl inline-block shrink-0"></div>
-  <div id="modal-announced-category" class="text-3xl md:text-4xl font-bold text-center px-6 py-3 rounded-2xl inline-block shrink-0 min-w-[7rem]"></div>
+<div class="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-2 sm:gap-3 mb-4 w-full max-w-full px-1">
+  <div id="modal-announced-color" class="text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 max-w-[min(100%,14rem)] truncate"></div>
+  <div id="modal-announced-category" class="text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 min-w-0 sm:min-w-[7rem] max-w-[min(100%,12rem)]"></div>
 </div>
 <p id="guess-instruction" class="text-center text-sm md:text-base mb-4 text-zinc-200">Click a seat on the table to guess.</p>
 <div id="guess-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></div>
@@ -505,8 +505,9 @@ SET 1 • ROUND 0 / ?
 
 <!-- ROLE MODAL -->
 <div id="role-modal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50">
-  <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-pink-400/40 modal">
-    <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3">ROLE ACTION</div>
+  <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 w-full max-w-xl border border-pink-400/40 modal relative">
+    <button type="button" onclick="closeRoleModalOnly()" class="absolute right-3 top-3 z-20 w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-lg font-bold leading-none border border-zinc-600" title="Close">✕</button>
+    <div class="text-center text-amber-200 text-sm font-bold tracking-widest mb-3 pr-8">ROLE ACTION</div>
     <h2 id="role-modal-title" class="text-2xl md:text-3xl text-center mb-2">Role Action</h2>
     <p id="role-modal-desc" class="text-center text-sm md:text-base mb-4 text-zinc-200"></p>
     <p id="role-modal-skill-info" class="hidden text-center text-xs md:text-sm text-cyan-300 mb-3"></p>
@@ -518,7 +519,6 @@ SET 1 • ROUND 0 / ?
     <div class="mt-4 text-center">
       <button id="role-trigger-btn" onclick="triggerRoleClaim()" class="hidden px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold mr-2">Trigger Role</button>
       <button id="role-apply-btn" onclick="applyRoleSelection()" class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold mr-2">Apply Role</button>
-      <button id="role-continue-btn" onclick="continueToGuessFromRole()" class="hidden px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Okay</button>
     </div>
   </div>
 </div>
@@ -2116,14 +2116,17 @@ function applyRoundStateFromFirebase(roundState, roundGuesses) {
         `;
       }
       dom.status.classList.remove("hidden");
+      const setEndBar =
+        !state.gameTillResult && state.currentRound >= state.numPlayers ? getSetCompleteActionsHtml() : "";
       dom.status.innerHTML = `
         <div class="text-lg font-bold text-amber-300 mb-2">Round ${state.currentRound} totals</div>
         <div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 mt-3 max-w-2xl mx-auto grid gap-2" style="grid-template-columns:repeat(${cols},minmax(0,1fr));">
           ${summaryHtml}
         </div>
         <div class="mt-2 flex items-center justify-center gap-2">
-          <button onclick="showRoundDetailsModal(${state.currentRound - 1})" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button>
+          <button type="button" onclick="showLastRoundDetailsModal()" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button>
         </div>
+        ${setEndBar}
       `;
     }
 
@@ -2535,7 +2538,7 @@ function startRound() {
   }
 
   if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
-    showFinalBoard();
+    showSetCompleteStatusPanel();
     return;
   }
 
@@ -2671,7 +2674,7 @@ function startRoundFromNetwork() {
   }
   renderCircle();
   if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
-    showFinalBoard();
+    showSetCompleteStatusPanel();
     return;
   }
   if (state.gameTillResult && state.currentRound >= state.numPlayers) {
@@ -2805,8 +2808,6 @@ function openInformationRoleModal(roleName, infoHtml) {
   if (abtn) abtn.classList.add("hidden");
   const tbtn = $("role-trigger-btn");
   if (tbtn) tbtn.classList.add("hidden");
-  const cbtn = $("role-continue-btn");
-  if (cbtn) cbtn.classList.remove("hidden");
   clearRoleModalSkillInfo();
   show(dom.roleModal);
 }
@@ -2855,8 +2856,6 @@ function openRoleActionModal(roleName) {
     instr.classList.remove("hidden");
     instr.textContent = "Select players on the table.";
   }
-  const cbtn = $("role-continue-btn");
-  if (cbtn) cbtn.classList.add("hidden");
   const abtn = $("role-apply-btn");
   if (abtn) abtn.classList.remove("hidden");
   state.roleSelection = [];
@@ -3021,7 +3020,11 @@ function openRoleActionModal(roleName) {
       </div>
     `;
     state.alchemistUsed = true;
-    closeRoleModalThenOpenGuess();
+    const abtnAl = $("role-apply-btn");
+    if (abtnAl) abtnAl.classList.add("hidden");
+    dom.roleModalCircle.classList.add("hidden");
+    const instrAl = $("role-modal-instruction");
+    if (instrAl) instrAl.classList.add("hidden");
   } else {
     dom.roleModalCircle.innerHTML = `
       <div class="absolute inset-0 rounded-full border-4 border-yellow-400/70 shadow-[0_0_30px_rgba(251,191,36,0.35)]"></div>
@@ -3054,8 +3057,6 @@ function openRoleActionModal(roleName) {
 }
 
 function closeRoleModalThenOpenGuess() {
-  const btn = $("role-continue-btn");
-  if (btn) btn.classList.remove("hidden");
   const abtn = $("role-apply-btn");
   if (abtn) abtn.classList.add("hidden");
   const tbtn = $("role-trigger-btn");
@@ -3063,9 +3064,10 @@ function closeRoleModalThenOpenGuess() {
   const instr = $("role-modal-instruction");
   if (instr) instr.classList.add("hidden");
   dom.roleModalCircle.classList.add("hidden");
-  const rwrap = $("role-modal-result-wrap");
-  if (rwrap) rwrap.classList.add("hidden");
   syncMyScore();
+  hide(dom.roleModal);
+  clearRoleModalSkillInfo();
+  openGuessModal();
 }
 
 function triggerRoleClaim() {
@@ -3122,6 +3124,7 @@ function showRoleDetailPopup(roleName) {
 
 function openEmpathWaitingModal() {
   state.empathPeekTarget = null;
+  state._empathGuessScheduled = false;
   dom.roleModalTitle.innerHTML = `
     <div class="text-2xl md:text-3xl text-center mb-2">THE EMPATH</div>
     <div class="text-base md:text-lg text-pink-300 text-center">Sense Suspicion</div>
@@ -3142,15 +3145,7 @@ function openEmpathWaitingModal() {
     instr.classList.remove("hidden");
     instr.textContent = "Select 1 player and click Apply Role.";
   }
-  
-  const cbtn = $("role-continue-btn");
-  if (cbtn) {
-    cbtn.classList.remove("hidden");
-    cbtn.disabled = true;
-    cbtn.classList.add("opacity-50", "cursor-not-allowed");
-    cbtn.textContent = "Okay";
-  }
-  
+
   const abtn = $("role-apply-btn");
   if (abtn) abtn.classList.remove("hidden");
   state.roleRequiredCount = 1;
@@ -3171,23 +3166,25 @@ function openEmpathWaitingModal() {
 function checkEmpathTargetGuess(target) {
   if (!state.empathPeekTarget || target !== state.empathPeekTarget) return;
   const waitStatus = $("empath-wait-status");
-  const cbtn = $("role-continue-btn");
   let targetGuess = null;
-  
+
   if (state.onlineMode && state.roundGuesses) {
     targetGuess = state.roundGuesses[target];
   } else if (!state.onlineMode && state.plannedGuesses) {
     targetGuess = state.plannedGuesses[target - 1];
   }
-  
+
   if (targetGuess !== undefined && targetGuess !== null) {
     if (waitStatus) {
       waitStatus.innerHTML = `<div class="text-pink-300 font-bold text-lg">✓ P${target} guessed P${targetGuess}</div>`;
     }
-    if (cbtn) {
-      cbtn.disabled = false;
-      cbtn.classList.remove("opacity-50", "cursor-not-allowed");
-      cbtn.textContent = "Okay";
+    if (!state._empathGuessScheduled) {
+      state._empathGuessScheduled = true;
+      setTimeout(() => {
+        hide(dom.roleModal);
+        clearRoleModalSkillInfo();
+        openGuessModal();
+      }, 600);
     }
   } else {
     if (waitStatus) {
@@ -3195,21 +3192,6 @@ function checkEmpathTargetGuess(target) {
     }
     setTimeout(() => checkEmpathTargetGuess(target), 500);
   }
-}
-
-function continueToGuessFromRole() {
-  const myRole = state.assignedRoles[state.myId - 1];
-  if (myRole === "The High Roller" && state.highRollerUsed && state.highRollerGuesses.length === 2) {
-    state.playerGuess = state.highRollerGuesses[0];
-  }
-  const btn = $("role-continue-btn");
-  if (btn) btn.classList.add("hidden");
-  dom.roleModalCircle.classList.remove("hidden");
-  const instr = $("role-modal-instruction");
-  if (instr) instr.classList.remove("hidden");
-  clearRoleModalSkillInfo();
-  hide(dom.roleModal);
-  openGuessModal();
 }
 
 function renderRoleSelectionCircle(requiredCount, selectable) {
@@ -3369,10 +3351,13 @@ function openGuessModal() {
   dom.modalColor.style.color = getContrastingText(announcedHex);
   dom.modalColor.textContent = state.announcedColor;
   const catEl = $("modal-announced-category");
-  const chipClass = "text-3xl md:text-4xl font-bold text-center px-6 py-3 rounded-2xl inline-block shrink-0";
+  const chipColor =
+    "text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 max-w-[min(100%,14rem)] truncate";
+  const chipCat =
+    "text-lg sm:text-2xl md:text-4xl font-bold text-center px-3 py-2 sm:px-6 sm:py-3 rounded-2xl inline-block shrink-0 min-w-0 sm:min-w-[7rem] max-w-[min(100%,12rem)]";
   if (catEl) {
     const cat = colorCategory[state.announcedColor] || "";
-    catEl.className = `${chipClass} min-w-[7rem]`;
+    catEl.className = chipCat;
     if (cat === "LIGHT") {
       catEl.textContent = "☀ LIGHT";
       const bg = "#f59e0b";
@@ -3393,7 +3378,7 @@ function openGuessModal() {
       else catEl.classList.remove("hidden");
     }
   }
-  dom.modalColor.className = `${chipClass}`;
+  dom.modalColor.className = chipColor;
 
   // High Roller can skip guess button not used here; keep hidden by default.
   const myRole = state.assignedRoles[state.myId - 1];
@@ -3578,7 +3563,7 @@ function noVote() {
 
   if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
     startBtn.disabled = true;
-    showFinalBoard();
+    showSetCompleteStatusPanel();
   } else {
     if (state.chatTimer) clearTimeout(state.chatTimer);
     startChatPhaseAfterRound();
@@ -4028,7 +4013,7 @@ function calculateRound() {
     </div>
     ${empathExtra}
     <div class="mt-2 flex items-center justify-center gap-2">
-      <button onclick="showRoundDetailsModal(${state.currentRound - 1})" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button>
+      <button type="button" onclick="showLastRoundDetailsModal()" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button>
       ${(!state.onlineMode && state.isTestMode) ? `<button onclick="goHome()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-800 rounded-xl text-xs font-bold">Go Home</button>` : ""}
     </div>
     <div class="mt-2 text-zinc-300 text-xs">Discussion: ${generateDiscussionLine(guesses)}</div>
@@ -4063,9 +4048,9 @@ function calculateRound() {
     return;
   }
 
-  if (!state.gameTillResult && state.currentRound >= state.numPlayers) {
-    showFinalBoard();
-    return;
+  const setJustEndedFixed = !state.gameTillResult && state.currentRound >= state.numPlayers;
+  if (setJustEndedFixed) {
+    dom.status.innerHTML += getSetCompleteActionsHtml();
   }
 
   if (state.gameTillResult && state.onlineMode && state.currentRound >= state.numPlayers) {
@@ -4073,7 +4058,7 @@ function calculateRound() {
   }
 
   if (state.chatTimer) clearTimeout(state.chatTimer);
-  if (!state.onlineMode) {
+  if (!state.onlineMode && !setJustEndedFixed) {
     startChatPhaseAfterRound();
   }
 
@@ -4124,17 +4109,19 @@ function calculateRound() {
 function showOnlineSetWrap() {
   const teamGoal = 250 * Math.ceil(state.numPlayers / 2);
   const cur = dom.status?.innerHTML || "";
+  const setBar = !state.gameTillResult ? getSetCompleteActionsHtml() : "";
   dom.status.innerHTML = `
     <div class="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3 mb-3 text-[11px] sm:text-xs text-amber-100 max-w-2xl mx-auto">
       <span class="font-bold text-amber-300">Set ${state.currentSet} wrapped.</span>
       Playing until a team wins: Light or Dark combined score ${teamGoal}, or only one category remains. Outcome will show as Light won / Dark won (not a fixed set count).
     </div>
     ${cur}
+    ${setBar}
   `;
 }
 
 function formatGameEndTitle(reason) {
-  if (!reason) return "SET COMPLETE!";
+  if (!reason) return "GAME OVER";
   if (reason.includes("LIGHT combined")) return "LIGHT TEAM WINS";
   if (reason.includes("DARK combined")) return "DARK TEAM WINS";
   if (reason.includes("All remaining players are LIGHT")) return "LIGHT WINS";
@@ -4763,6 +4750,53 @@ function hidePointRulesModal() {
 
 function hideRoundDetailsModal() {
   hide($("round-details-modal"));
+}
+
+function showLastRoundDetailsModal() {
+  const n = state.roundHistory?.length || 0;
+  if (!n) return;
+  showRoundDetailsModal(n - 1);
+}
+
+function getSetCompleteActionsHtml() {
+  return `
+    <div class="mt-6 pt-4 border-t border-zinc-600 space-y-3 max-w-2xl mx-auto">
+      <div class="text-amber-300 font-bold text-center text-sm">Set finished — choose next step</div>
+      <div class="flex flex-wrap justify-center gap-2">
+        <button type="button" onclick="startNewSet()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold">NEW SET</button>
+        <button type="button" onclick="showHistoryModal()" class="px-4 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-xs font-bold">HISTORY</button>
+        <button type="button" onclick="forceEndGame()" class="px-4 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-800 text-xs font-bold">END GAME</button>
+      </div>
+    </div>`;
+}
+
+function showSetCompleteStatusPanel() {
+  const cols = Math.ceil(state.numPlayers / 2);
+  const sizeCls = state.numPlayers <= 6 ? "text-base sm:text-xl md:text-2xl" : state.numPlayers <= 9 ? "text-sm sm:text-lg md:text-xl" : "text-xs sm:text-base md:text-lg";
+  let summaryHtml = "";
+  for (let p = 1; p <= state.numPlayers; p++) {
+    const totalNow = Math.round((state.playerScores[p - 1] || 0) * 10) / 10;
+    summaryHtml += `
+      <div class="min-w-0 px-2 sm:px-3 py-2 sm:py-3 rounded-xl border border-cyan-500/20 bg-zinc-800/70 text-center">
+        <div class="${sizeCls} leading-tight font-black ${totalNow >= 0 ? "text-emerald-300" : "text-rose-300"}">${totalNow}</div>
+      </div>
+    `;
+  }
+  dom.status.innerHTML = `
+    <div class="text-lg font-bold text-amber-300 mb-2">Set ${state.currentSet} complete</div>
+    <div class="bg-zinc-900/70 border border-cyan-500/30 rounded-2xl p-4 mt-3 max-w-2xl mx-auto grid gap-2" style="grid-template-columns:repeat(${cols},minmax(0,1fr));">
+      ${summaryHtml}
+    </div>
+    <div class="mt-2 flex items-center justify-center gap-2">
+      <button type="button" onclick="showLastRoundDetailsModal()" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 rounded-xl text-xs font-bold">View Round Details</button>
+    </div>
+    ${getSetCompleteActionsHtml()}
+  `;
+}
+
+function closeRoleModalOnly() {
+  hide(dom.roleModal);
+  clearRoleModalSkillInfo();
 }
 
 function startNewSet() {
